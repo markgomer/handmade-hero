@@ -6,7 +6,9 @@ mkdir -p ./build
 
 # set debug flags
 
-# build with something
+# build in this directory
 pushd build/
-gcc ../src/main.c -o main
+# -g and -Wall are debug symbols
+gcc -g -Wall ../src/main.c -o main
+# go back to initial directory
 popd
