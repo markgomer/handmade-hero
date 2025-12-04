@@ -1,3 +1,4 @@
+#include <X11/Xlib.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -35,6 +36,19 @@ RenderWeirdGradient(int BlueOffset, int GreenOffset)
 int
 main(int argc, char *argv[])
 {
-    system("zenity --info --text='Hello, this is a message box!'");
-    return (0);
+    Display *dpy = XOpenDisplay(NULL);
+    int scr = DefaultScreen(dpy);
+    Window wnd = XCreateSimpleWindow(dpy, RootWindow(dpy, scr),
+                                     0, 0, 320, 240, 0,
+                                     BlackPixel(dpy, scr), WhitePixel(dpy, scr));
+    XStoreName(dpy, wnd, "Hello, X11");
+    XSelectInput(dpy, wnd, ExposureMask | KeyPressMask);
+    XMapWindow(dpy, wnd);
+    for (;;)
+    {
+        XEvent e;
+        XNextEvent(dpy, &e);
+        // handle events here
+    }
+    return XCloseDisplay(dpy);
 }

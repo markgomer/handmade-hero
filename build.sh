@@ -9,6 +9,6 @@ mkdir -p ./build
 # build in this directory
 pushd build/
 # -g and -Wall are debug symbols
-g++ -g -Wall ../src/main.cpp -o main
+g++ -g -Wall ../src/main.cpp -o main -lX11
 # go back to initial directory
 popd
