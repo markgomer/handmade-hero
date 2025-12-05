@@ -52,7 +52,7 @@ main(int argc, char *argv[])
     Buffer.Width = 1280;
     Buffer.Height = 720;
     Buffer.BytesPerPixel = 4;
-    Buffer.Pitch = 320*Buffer.BytesPerPixel;
+    Buffer.Pitch = Buffer.Width*Buffer.BytesPerPixel;
     int BitMapMemorySize = (Buffer.Width*Buffer.Height)*Buffer.BytesPerPixel;
     Buffer.Memory = malloc(BitMapMemorySize);
     if (!Buffer.Memory)
