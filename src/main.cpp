@@ -1,7 +1,4 @@
-#include <X11/X.h>
 #include <X11/Xlib.h>
-#include <cstdint>
-#include <cstdlib>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -26,7 +23,7 @@ struct windowDimension {
 internal void
 RenderWeirdGradient(offScreenBuffer* Buffer, int BlueOffset, int GreenOffset)
 {
-    uint8_t *Row = (uint8_t *)Buffer->Memory;
+    uint8_t* Row = (uint8_t*)Buffer->Memory;
     for(int Y = 0;
         Y < Buffer->Height;
         ++Y)
@@ -74,22 +71,31 @@ main(int argc, char *argv[])
     // for (int i = 0; i < BitMapWidth * BitMapHeight; i++) {
     //     drawing[i] = 0x00FF0000; // Red in ARGB format
     // }
-
-    RenderWeirdGradient(&Buffer, 0, 0);
-
     GC gc = XCreateGC(dpy, wnd, 0, 0);
     XImage *img = XCreateImage(dpy, DefaultVisual(dpy, 0), 24, ZPixmap, 0,
-                              (char*)Buffer.Memory,
-                               Buffer.Width, Buffer.Height,
-                               32, 0);
-    for (;;)
+                            (char*)Buffer.Memory,
+                            Buffer.Width, Buffer.Height,
+                            32, 0);
+
+    int BlueOffset = 0;
+    int GreenOffset = 0;
+    uint8_t isRunning = 1;
+    while (isRunning)
     {
-        XEvent e;
-        XNextEvent(dpy, &e);
-        // handle events here
+        RenderWeirdGradient(&Buffer, BlueOffset, GreenOffset);
+
+        while (XPending(dpy))
+        {
+            /* handle events */
+            XEvent e;
+            XNextEvent(dpy, &e);
+        }
+
         XPutImage(dpy, wnd, gc, img, 0, 0, 0, 0,
                   Buffer.Width, Buffer.Height);
         XFlush(dpy);
+        BlueOffset++;
+        GreenOffset++;
     }
     return XCloseDisplay(dpy);
 }
