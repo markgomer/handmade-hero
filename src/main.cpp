@@ -1,36 +1,53 @@
 #include <X11/Xlib.h>
+#include <cstdint>
 #include <stdint.h>
-#include <stdlib.h>
 
 #define internal        static
 #define local_persist   static
 #define global_variable static
 
-struct offScreenBuffer
-{
-    void* Memory;
-    int Width;
-    int Height;
-    int Pitch;
-    int BytesPerPixel;
-};
+#define pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
 
-struct windowDimension {
-    int Width;
-    int Height;
+struct Buffer {
+    const char *title;
+    const int width;
+    const int height;
+    uint32_t *buf;
+    int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
+    int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
+    int x;
+    int y;
+    int mouse;
+    /* Linux(X11) specifics */
+    Display *dpy;
+    Window w;
+    GC gc;
+    XImage *img;
 };
 
 internal void
-RenderWeirdGradient(offScreenBuffer* Buffer, int BlueOffset, int GreenOffset)
+MaDraw(Buffer* buffer)
 {
-    uint8_t* Row = (uint8_t*)Buffer->Memory;
+    // pixel(buffer, 25, 40) = 0xff0000;
+    /* 0xRRGGBB */
+    buffer->buf[100] = 0x00ff00;
+    pixel(buffer, 64, 64) = 0xffff00;
+}
+
+internal void
+RenderWeirdGradient(Buffer* Window, int BlueOffset, int GreenOffset)
+{
+    int Pitch = Window->width*4;
+    uint8_t Memory = (Window->width * Window->height)*4;
+
+    uint8_t* Row = &Memory;
     for(int Y = 0;
-        Y < Buffer->Height;
+        Y < Window->height;
         ++Y)
     {
         uint32_t* Pixel = (uint32_t*)Row;
         for(int X = 0;
-            X < Buffer->Width;
+            X < Window->width;
             ++X)
         {
             uint8_t Blue = (X + BlueOffset);
@@ -38,64 +55,82 @@ RenderWeirdGradient(offScreenBuffer* Buffer, int BlueOffset, int GreenOffset)
 
             *Pixel++ = ((Green << 8) | Blue);
         }
-        Row += Buffer->Pitch;
+        Row += Pitch;
     }
+}
+
+internal int
+OpenWindow(struct Buffer* wnd)
+{
+
+    wnd->dpy = XOpenDisplay(NULL);
+    int screen = DefaultScreen(wnd->dpy);
+    wnd->w = XCreateSimpleWindow(wnd->dpy, RootWindow(wnd->dpy, screen), 0, 0,
+                                 wnd->width, wnd->height, 0,
+                                 BlackPixel(wnd->dpy, screen),
+                                 WhitePixel(wnd->dpy, screen));
+    wnd->gc = XCreateGC(wnd->dpy, wnd->w, 0, 0);
+    XSelectInput(wnd->dpy, wnd->w,
+                 ExposureMask | KeyPressMask | KeyReleaseMask |
+                 ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
+    XStoreName(wnd->dpy, wnd->w, wnd->title);
+    XMapWindow(wnd->dpy, wnd->w);
+    XSync(wnd->dpy, wnd->w);
+    wnd->img = XCreateImage(wnd->dpy, DefaultVisual(wnd->dpy, 0), 24, ZPixmap,
+                            0, (char *)wnd->buf,
+                            wnd->width, wnd->height,
+                            32, 0);
+    return 0;
+}
+
+internal int
+HandleLoop(struct Buffer* wnd)
+{
+    XEvent ev;
+    XPutImage(wnd->dpy, wnd->w, wnd->gc, wnd->img, 0, 0, 0, 0,
+              wnd->width, wnd->height);
+    XFlush(wnd->dpy);
+
+    while (XPending(wnd->dpy))
+    {
+        XNextEvent(wnd->dpy, &ev);
+        switch (ev.type)
+        {
+            case ButtonPress:
+            {
+            } break;
+            case ButtonRelease:
+            {
+                wnd->mouse = (ev.type == ButtonPress);
+            } break;
+            case MotionNotify:
+            {
+                wnd->x = ev.xmotion.x, wnd->y = ev.xmotion.y;
+            } break;
+            case KeyPress:
+            {
+            } break;
+            case KeyRelease:
+            {
+            } break;
+        }
+    }
+    return 0;
 }
 
 int
 main(int argc, char *argv[])
 {
-    offScreenBuffer Buffer;
-    Buffer.Width = 1280;
-    Buffer.Height = 720;
-    Buffer.BytesPerPixel = 4;
-    Buffer.Pitch = Buffer.Width*Buffer.BytesPerPixel;
-    int BitMapMemorySize = (Buffer.Width*Buffer.Height)*Buffer.BytesPerPixel;
-    Buffer.Memory = malloc(BitMapMemorySize);
-    if (!Buffer.Memory)
-    {
-        return -1;
+    int W = 600, H = 480;
+    uint32_t buf[W * H];
+    struct Buffer buffer = {
+        .title = "hello",
+        .width = W,
+        .height = H,
+        .buf = buf,
+    };
+    OpenWindow(&buffer);
+    while(HandleLoop(&buffer) == 0) {
+        MaDraw(&buffer);
     }
-
-    Display *dpy = XOpenDisplay(NULL);
-    int scr = DefaultScreen(dpy);
-    Window wnd = XCreateSimpleWindow(dpy, RootWindow(dpy, scr),
-                                     0, 0, Buffer.Width, Buffer.Height, 0,
-                                     WhitePixel(dpy, scr),
-                                     BlackPixel(dpy, scr));
-    XStoreName(dpy, wnd, "Hello, X11");
-    XSelectInput(dpy, wnd, ExposureMask | KeyPressMask);
-    XMapWindow(dpy, wnd);
-
-    // uint32_t drawing[BitMapWidth*BitMapHeight];
-    // for (int i = 0; i < BitMapWidth * BitMapHeight; i++) {
-    //     drawing[i] = 0x00FF0000; // Red in ARGB format
-    // }
-    GC gc = XCreateGC(dpy, wnd, 0, 0);
-    XImage *img = XCreateImage(dpy, DefaultVisual(dpy, 0), 24, ZPixmap, 0,
-                            (char*)Buffer.Memory,
-                            Buffer.Width, Buffer.Height,
-                            32, 0);
-
-    int BlueOffset = 0;
-    int GreenOffset = 0;
-    uint8_t isRunning = 1;
-    while (isRunning)
-    {
-        RenderWeirdGradient(&Buffer, BlueOffset, GreenOffset);
-
-        while (XPending(dpy))
-        {
-            /* handle events */
-            XEvent e;
-            XNextEvent(dpy, &e);
-        }
-
-        XPutImage(dpy, wnd, gc, img, 0, 0, 0, 0,
-                  Buffer.Width, Buffer.Height);
-        XFlush(dpy);
-        BlueOffset++;
-        GreenOffset++;
-    }
-    return XCloseDisplay(dpy);
 }
