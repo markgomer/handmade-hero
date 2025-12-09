@@ -1,5 +1,4 @@
 #include <X11/Xlib.h>
-#include <cstdint>
 #include <stdint.h>
 
 #define internal        static
@@ -32,6 +31,14 @@ MaDraw(Buffer* buffer)
     /* 0xRRGGBB */
     buffer->buf[100] = 0x00ff00;
     pixel(buffer, 64, 64) = 0xffff00;
+
+    for (int Y = 0; Y < buffer->height; ++Y)
+    {
+        for (int X = 0; X < buffer->width; ++X)
+        {
+            pixel(buffer, X, Y) = 0xff00ff00;
+        }
+    }
 }
 
 internal void
@@ -62,7 +69,6 @@ RenderWeirdGradient(Buffer* Window, int BlueOffset, int GreenOffset)
 internal int
 OpenWindow(struct Buffer* wnd)
 {
-
     wnd->dpy = XOpenDisplay(NULL);
     int screen = DefaultScreen(wnd->dpy);
     wnd->w = XCreateSimpleWindow(wnd->dpy, RootWindow(wnd->dpy, screen), 0, 0,
@@ -144,7 +150,8 @@ main(int argc, char *argv[])
         .buf = buf,
     };
     OpenWindow(&buffer);
-    while(HandleLoop(&buffer) == 0) {
+    while(HandleLoop(&buffer) == 0)
+    {
         MaDraw(&buffer);
     }
     XCloseDisplay(buffer.dpy);
