@@ -75,6 +75,10 @@ OpenWindow(struct Buffer* wnd)
                  ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
     XStoreName(wnd->dpy, wnd->w, wnd->title);
     XMapWindow(wnd->dpy, wnd->w);
+
+    Atom wmDelete = XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(wnd->dpy, wnd->w, &wmDelete, 1);
+
     XSync(wnd->dpy, wnd->w);
     wnd->img = XCreateImage(wnd->dpy, DefaultVisual(wnd->dpy, 0), 24, ZPixmap,
                             0, (char *)wnd->buf,
@@ -86,6 +90,7 @@ OpenWindow(struct Buffer* wnd)
 internal int
 HandleLoop(struct Buffer* wnd)
 {
+    uint8_t ShouldQuit = 0;
     XEvent ev;
     XPutImage(wnd->dpy, wnd->w, wnd->gc, wnd->img, 0, 0, 0, 0,
               wnd->width, wnd->height);
@@ -113,9 +118,18 @@ HandleLoop(struct Buffer* wnd)
             case KeyRelease:
             {
             } break;
+            case ClientMessage:
+            {
+                // Window close button
+                if (ev.xclient.data.l[0] ==
+                        (long)XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False))
+                {
+                    ShouldQuit = 1;
+                }
+            } break;
         }
     }
-    return 0;
+    return ShouldQuit;
 }
 
 int
@@ -133,4 +147,5 @@ main(int argc, char *argv[])
     while(HandleLoop(&buffer) == 0) {
         MaDraw(&buffer);
     }
+    XCloseDisplay(buffer.dpy);
 }
