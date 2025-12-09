@@ -27,8 +27,6 @@ struct Buffer {
 internal void
 MaDraw(Buffer* buffer)
 {
-    // pixel(buffer, 25, 40) = 0xff0000;
-    /* 0xRRGGBB */
     buffer->buf[100] = 0x00ff00;
     pixel(buffer, 64, 64) = 0xffff00;
 
@@ -36,7 +34,22 @@ MaDraw(Buffer* buffer)
     {
         for (int X = 0; X < buffer->width; ++X)
         {
-            pixel(buffer, X, Y) = 0xff00ff00;
+            pixel(buffer, X, Y) = 0;
+        }
+    }
+}
+
+internal void
+RenderWeirdGradient_rw(Buffer* Window, int BlueOffset, int GreenOffset)
+{
+    for(int Y = 0; Y < Window->height; ++Y)
+    {
+        for(int X = 0; X < Window->width; ++X)
+        {
+            uint8_t Blue = (X);
+            uint8_t Green = (Y);
+
+            pixel(Window, X, Y) = ((Green << 8) | Blue);
         }
     }
 }
@@ -44,25 +57,24 @@ MaDraw(Buffer* buffer)
 internal void
 RenderWeirdGradient(Buffer* Window, int BlueOffset, int GreenOffset)
 {
-    int Pitch = Window->width*4;
-    uint8_t Memory = (Window->width * Window->height)*4;
+    uint8_t BytesPerPixel = 4;
+    int Pitch = Window->width * BytesPerPixel; // size of the line (pitch)
+    uint8_t* Memory = (uint8_t*)Window->buf;
 
-    uint8_t* Row = &Memory;
-    for(int Y = 0;
-        Y < Window->height;
-        ++Y)
+    uint8_t* Row = Memory;  // points at first row
+    for(int Y = 0; Y < Window->height; ++Y)
     {
-        uint32_t* Pixel = (uint32_t*)Row;
-        for(int X = 0;
-            X < Window->width;
-            ++X)
+        uint32_t* Pixel = (uint32_t*)Row; // points to the first pixen on the row
+        for(int X = 0; X < Window->width; ++X)
         {
             uint8_t Blue = (X + BlueOffset);
-            uint8_t Green = (X + GreenOffset);
+            uint8_t Green = (Y + GreenOffset);
 
-            *Pixel++ = ((Green << 8) | Blue);
+            // blue is in the big end, green in the next 8 bytes.
+            // they'll be offset
+            *Pixel++ = ((Green << 8) | Blue);  // Write & advance
         }
-        Row += Pitch;
+        Row += Pitch;  // Jump Row pointer to next row
     }
 }
 
@@ -152,7 +164,8 @@ main(int argc, char *argv[])
     OpenWindow(&buffer);
     while(HandleLoop(&buffer) == 0)
     {
-        MaDraw(&buffer);
+        // MaDraw(&buffer);
+        RenderWeirdGradient(&buffer, 0, 0);
     }
     XCloseDisplay(buffer.dpy);
 }
