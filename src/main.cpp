@@ -90,10 +90,12 @@ OpenWindow(struct Buffer* wnd)
     wnd->gc = XCreateGC(wnd->dpy, wnd->w, 0, 0);
     XSelectInput(wnd->dpy, wnd->w,
                  ExposureMask | KeyPressMask | KeyReleaseMask |
-                 ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
+                 ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
+                 StructureNotifyMask);
     XStoreName(wnd->dpy, wnd->w, wnd->title);
     XMapWindow(wnd->dpy, wnd->w);
 
+    // Enable window closing
     Atom wmDelete = XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(wnd->dpy, wnd->w, &wmDelete, 1);
 
