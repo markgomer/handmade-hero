@@ -100,7 +100,6 @@ OpenWindow(struct Buffer* wnd)
     Atom wmDelete = XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(wnd->dpy, wnd->w, &wmDelete, 1);
 
-    XSync(wnd->dpy, wnd->w);
     wnd->img = XCreateImage(wnd->dpy, DefaultVisual(wnd->dpy, 0), 24, ZPixmap,
                             0, (char *)wnd->buf,
                             wnd->width, wnd->height,
@@ -115,7 +114,6 @@ HandleLoop(struct Buffer* wnd)
     XEvent ev;
     XPutImage(wnd->dpy, wnd->w, wnd->gc, wnd->img, 0, 0, 0, 0,
               wnd->width, wnd->height);
-    XFlush(wnd->dpy);
 
     while (XPending(wnd->dpy))
     {
