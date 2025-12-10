@@ -151,7 +151,6 @@ HandleLoop(struct Buffer* wnd)
                     wnd->img->data = NULL;  // Prevent XLib from freeing our buffer
                     XFree(wnd->img);
 
-                    // Reallocate buffer
                     wnd->buf = (uint32_t*)realloc(wnd->buf, wnd->width * wnd->height * sizeof(uint32_t));
 
                     // Create completely new XImage
@@ -178,7 +177,6 @@ int
 main(int argc, char *argv[])
 {
     int W = 600, H = 480;
-    // uint32_t buf[W * H];
     uint32_t *buf = (uint32_t*)malloc(W * H * sizeof(uint32_t));
     struct Buffer buffer = {
         .title = "hello",
@@ -187,10 +185,12 @@ main(int argc, char *argv[])
         .buf = buf,
     };
     OpenWindow(&buffer);
+    int XOffset = 0, YOffset = 0;
     while(HandleLoop(&buffer) == 0)
     {
-        // MaDraw(&buffer);
-        RenderWeirdGradient(&buffer, 0, 0);
+        RenderWeirdGradient(&buffer, XOffset, YOffset);
+        XOffset++;
+        YOffset++;
     }
     XCloseDisplay(buffer.dpy);
 }
