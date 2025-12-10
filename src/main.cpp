@@ -1,5 +1,6 @@
 #include <X11/Xlib.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #define internal        static
 #define local_persist   static
@@ -9,8 +10,8 @@
 
 struct Buffer {
     const char *title;
-    const int width;
-    const int height;
+    int width;
+    int height;
     uint32_t *buf;
     int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
     int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
@@ -90,10 +91,12 @@ OpenWindow(struct Buffer* wnd)
     wnd->gc = XCreateGC(wnd->dpy, wnd->w, 0, 0);
     XSelectInput(wnd->dpy, wnd->w,
                  ExposureMask | KeyPressMask | KeyReleaseMask |
-                 ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
+                 ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
+                 StructureNotifyMask);
     XStoreName(wnd->dpy, wnd->w, wnd->title);
     XMapWindow(wnd->dpy, wnd->w);
 
+    // Enable window closing
     Atom wmDelete = XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(wnd->dpy, wnd->w, &wmDelete, 1);
 
@@ -136,6 +139,26 @@ HandleLoop(struct Buffer* wnd)
             case KeyRelease:
             {
             } break;
+            case ConfigureNotify:  // Window resizing
+            {
+                XConfigureEvent xce = ev.xconfigure;
+                if (xce.width != wnd->width || xce.height != wnd->height)
+                {
+                    wnd->width = xce.width;
+                    wnd->height = xce.height;
+
+                    // Free the old XImage structure (not the data)
+                    wnd->img->data = NULL;  // Prevent XLib from freeing our buffer
+                    XFree(wnd->img);
+
+                    wnd->buf = (uint32_t*)realloc(wnd->buf, wnd->width * wnd->height * sizeof(uint32_t));
+
+                    // Create completely new XImage
+                    wnd->img = XCreateImage(wnd->dpy, DefaultVisual(wnd->dpy, 0), 24, ZPixmap,
+                                            0, (char *)wnd->buf,
+                                            wnd->width, wnd->height, 32, 0);
+                }
+            } break;
             case ClientMessage:
             {
                 // Window close button
@@ -154,7 +177,7 @@ int
 main(int argc, char *argv[])
 {
     int W = 600, H = 480;
-    uint32_t buf[W * H];
+    uint32_t *buf = (uint32_t*)malloc(W * H * sizeof(uint32_t));
     struct Buffer buffer = {
         .title = "hello",
         .width = W,
@@ -162,10 +185,12 @@ main(int argc, char *argv[])
         .buf = buf,
     };
     OpenWindow(&buffer);
+    int XOffset = 0, YOffset = 0;
     while(HandleLoop(&buffer) == 0)
     {
-        // MaDraw(&buffer);
-        RenderWeirdGradient(&buffer, 0, 0);
+        RenderWeirdGradient(&buffer, XOffset, YOffset);
+        XOffset++;
+        YOffset++;
     }
     XCloseDisplay(buffer.dpy);
 }
