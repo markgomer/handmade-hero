@@ -1,5 +1,6 @@
 #include <X11/Xlib.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #define internal        static
 #define local_persist   static
@@ -9,8 +10,8 @@
 
 struct Buffer {
     const char *title;
-    const int width;
-    const int height;
+    int width;
+    int height;
     uint32_t *buf;
     int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
     int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
@@ -138,6 +139,27 @@ HandleLoop(struct Buffer* wnd)
             case KeyRelease:
             {
             } break;
+            case ConfigureNotify:  // Window resizing
+            {
+                XConfigureEvent xce = ev.xconfigure;
+                if (xce.width != wnd->width || xce.height != wnd->height)
+                {
+                    wnd->width = xce.width;
+                    wnd->height = xce.height;
+
+                    // Free the old XImage structure (not the data)
+                    wnd->img->data = NULL;  // Prevent XLib from freeing our buffer
+                    XFree(wnd->img);
+
+                    // Reallocate buffer
+                    wnd->buf = (uint32_t*)realloc(wnd->buf, wnd->width * wnd->height * sizeof(uint32_t));
+
+                    // Create completely new XImage
+                    wnd->img = XCreateImage(wnd->dpy, DefaultVisual(wnd->dpy, 0), 24, ZPixmap,
+                                            0, (char *)wnd->buf,
+                                            wnd->width, wnd->height, 32, 0);
+                }
+            } break;
             case ClientMessage:
             {
                 // Window close button
@@ -156,7 +178,8 @@ int
 main(int argc, char *argv[])
 {
     int W = 600, H = 480;
-    uint32_t buf[W * H];
+    // uint32_t buf[W * H];
+    uint32_t *buf = (uint32_t*)malloc(W * H * sizeof(uint32_t));
     struct Buffer buffer = {
         .title = "hello",
         .width = W,
