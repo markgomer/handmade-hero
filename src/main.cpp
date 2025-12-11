@@ -1,6 +1,10 @@
 #include <X11/Xlib.h>
+#include <X11/XKBlib.h>
+#include <X11/keysym.h>
+#include <cstdint>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #define internal        static
 #define local_persist   static
@@ -24,6 +28,9 @@ struct Buffer {
     GC gc;
     XImage *img;
 };
+
+/* from https://github.com/zserge/fenster/blob/main/fenster.h */
+static int FENSTER_KEYCODES[124] = {XK_BackSpace,8,XK_Delete,127,XK_Down,18,XK_End,5,XK_Escape,27,XK_Home,2,XK_Insert,26,XK_Left,20,XK_Page_Down,4,XK_Page_Up,3,XK_Return,10,XK_Right,19,XK_Tab,9,XK_Up,17,XK_apostrophe,39,XK_backslash,92,XK_bracketleft,91,XK_bracketright,93,XK_comma,44,XK_equal,61,XK_grave,96,XK_minus,45,XK_period,46,XK_semicolon,59,XK_slash,47,XK_space,32,XK_a,65,XK_b,66,XK_c,67,XK_d,68,XK_e,69,XK_f,70,XK_g,71,XK_h,72,XK_i,73,XK_j,74,XK_k,75,XK_l,76,XK_m,77,XK_n,78,XK_o,79,XK_p,80,XK_q,81,XK_r,82,XK_s,83,XK_t,84,XK_u,85,XK_v,86,XK_w,87,XK_x,88,XK_y,89,XK_z,90,XK_0,48,XK_1,49,XK_2,50,XK_3,51,XK_4,52,XK_5,53,XK_6,54,XK_7,55,XK_8,56,XK_9,57};
 
 internal void
 MaDraw(Buffer* buffer)
@@ -142,9 +149,23 @@ HandleLoop(struct Buffer* buffer)
             } break;
             case KeyRelease:
             {
+                    printf("WHATIS THIS?\n");
+                int m = ev.xkey.state;
+                int k = XkbKeycodeToKeysym(buffer->dpy, ev.xkey.keycode, 0, 0);
+                for (uint32_t i = 0; i < 124; i += 2)
+                {
+                    if (FENSTER_KEYCODES[i] == k)
+                    {
+                        buffer->keys[FENSTER_KEYCODES[i + 1]] = (ev.type == KeyPress);
+                        break;
+                    }
+                }
+                buffer->mod = (!!(m & ControlMask)) | (!!(m & ShiftMask) << 1) |
+                    (!!(m & Mod1Mask) << 2) | (!!(m & Mod4Mask) << 3);
             } break;
             case ConfigureNotify:  // Window resizing
             {
+                printf("DEPLOYED!\n");
                 XConfigureEvent xce = ev.xconfigure;
                 if (xce.width != buffer->width || xce.height != buffer->height)
                 {
@@ -159,9 +180,12 @@ HandleLoop(struct Buffer* buffer)
                     buffer->buf = (uint32_t*)realloc(buffer->buf, buffer->width * buffer->height * sizeof(uint32_t));
 
                     // Create completely new XImage
-                    buffer->img = XCreateImage(buffer->dpy, DefaultVisual(buffer->dpy, 0), 24, ZPixmap,
-                                            0, (char *)buffer->buf,
-                                            buffer->width, buffer->height, 32, 0);
+                    buffer->img = XCreateImage(buffer->dpy,
+                                               DefaultVisual(buffer->dpy, 0),
+                                               24, ZPixmap, 0,
+                                               (char *)buffer->buf,
+                                               buffer->width, buffer->height,
+                                               32, 0);
                 }
             } break;
             case ClientMessage:
