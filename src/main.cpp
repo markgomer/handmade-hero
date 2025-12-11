@@ -80,44 +80,45 @@ RenderWeirdGradient(Buffer* Window, int BlueOffset, int GreenOffset)
 }
 
 internal int
-OpenWindow(struct Buffer* wnd)
+OpenWindow(struct Buffer* buffer)
 {
-    wnd->dpy = XOpenDisplay(NULL);
-    int screen = DefaultScreen(wnd->dpy);
-    wnd->w = XCreateSimpleWindow(wnd->dpy, RootWindow(wnd->dpy, screen), 0, 0,
-                                 wnd->width, wnd->height, 0,
-                                 BlackPixel(wnd->dpy, screen),
-                                 WhitePixel(wnd->dpy, screen));
-    wnd->gc = XCreateGC(wnd->dpy, wnd->w, 0, 0);
-    XSelectInput(wnd->dpy, wnd->w,
+    buffer->dpy = XOpenDisplay(NULL);
+    int screen = DefaultScreen(buffer->dpy);
+    buffer->w = XCreateSimpleWindow(buffer->dpy, RootWindow(buffer->dpy, screen), 0, 0,
+                                 buffer->width, buffer->height, 0,
+                                 BlackPixel(buffer->dpy, screen),
+                                 WhitePixel(buffer->dpy, screen));
+    buffer->gc = XCreateGC(buffer->dpy, buffer->w, 0, 0);
+    XSelectInput(buffer->dpy, buffer->w,
                  ExposureMask | KeyPressMask | KeyReleaseMask |
                  ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
                  StructureNotifyMask);
-    XStoreName(wnd->dpy, wnd->w, wnd->title);
-    XMapWindow(wnd->dpy, wnd->w);
+    XStoreName(buffer->dpy, buffer->w, buffer->title);
+    XMapWindow(buffer->dpy, buffer->w);
 
     // Enable window closing
-    Atom wmDelete = XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False);
-    XSetWMProtocols(wnd->dpy, wnd->w, &wmDelete, 1);
+    Atom wmDelete = XInternAtom(buffer->dpy, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(buffer->dpy, buffer->w, &wmDelete, 1);
 
-    wnd->img = XCreateImage(wnd->dpy, DefaultVisual(wnd->dpy, 0), 24, ZPixmap,
-                            0, (char *)wnd->buf,
-                            wnd->width, wnd->height,
+    buffer->img = XCreateImage(buffer->dpy, DefaultVisual(buffer->dpy, 0), 24, ZPixmap,
+                            0, (char *)buffer->buf,
+                            buffer->width, buffer->height,
                             32, 0);
     return 0;
 }
 
 internal int
-HandleLoop(struct Buffer* wnd)
+HandleLoop(struct Buffer* buffer)
 {
     uint8_t ShouldQuit = 0;
     XEvent ev;
-    XPutImage(wnd->dpy, wnd->w, wnd->gc, wnd->img, 0, 0, 0, 0,
-              wnd->width, wnd->height);
+    // This is where the buffer appears!
+    XPutImage(buffer->dpy, buffer->w, buffer->gc, buffer->img, 0, 0, 0, 0,
+              buffer->width, buffer->height);
 
-    while (XPending(wnd->dpy))
+    while (XPending(buffer->dpy))
     {
-        XNextEvent(wnd->dpy, &ev);
+        XNextEvent(buffer->dpy, &ev);
         switch (ev.type)
         {
             case ButtonPress:
@@ -125,11 +126,11 @@ HandleLoop(struct Buffer* wnd)
             } break;
             case ButtonRelease:
             {
-                wnd->mouse = (ev.type == ButtonPress);
+                buffer->mouse = (ev.type == ButtonPress);
             } break;
             case MotionNotify:
             {
-                wnd->x = ev.xmotion.x, wnd->y = ev.xmotion.y;
+                buffer->x = ev.xmotion.x, buffer->y = ev.xmotion.y;
             } break;
             case KeyPress:
             {
@@ -140,28 +141,29 @@ HandleLoop(struct Buffer* wnd)
             case ConfigureNotify:  // Window resizing
             {
                 XConfigureEvent xce = ev.xconfigure;
-                if (xce.width != wnd->width || xce.height != wnd->height)
+                if (xce.width != buffer->width || xce.height != buffer->height)
                 {
-                    wnd->width = xce.width;
-                    wnd->height = xce.height;
+                    // Resize the buffer
+                    buffer->width = xce.width;
+                    buffer->height = xce.height;
 
                     // Free the old XImage structure (not the data)
-                    wnd->img->data = NULL;  // Prevent XLib from freeing our buffer
-                    XFree(wnd->img);
+                    buffer->img->data = NULL;  // Prevent XLib from freeing our buffer
+                    XFree(buffer->img);
 
-                    wnd->buf = (uint32_t*)realloc(wnd->buf, wnd->width * wnd->height * sizeof(uint32_t));
+                    buffer->buf = (uint32_t*)realloc(buffer->buf, buffer->width * buffer->height * sizeof(uint32_t));
 
                     // Create completely new XImage
-                    wnd->img = XCreateImage(wnd->dpy, DefaultVisual(wnd->dpy, 0), 24, ZPixmap,
-                                            0, (char *)wnd->buf,
-                                            wnd->width, wnd->height, 32, 0);
+                    buffer->img = XCreateImage(buffer->dpy, DefaultVisual(buffer->dpy, 0), 24, ZPixmap,
+                                            0, (char *)buffer->buf,
+                                            buffer->width, buffer->height, 32, 0);
                 }
             } break;
             case ClientMessage:
             {
                 // Window close button
                 if (ev.xclient.data.l[0] ==
-                        (long)XInternAtom(wnd->dpy, "WM_DELETE_WINDOW", False))
+                        (long)XInternAtom(buffer->dpy, "WM_DELETE_WINDOW", False))
                 {
                     ShouldQuit = 1;
                 }
@@ -182,7 +184,9 @@ main(int argc, char *argv[])
         .height = H,
         .buf = buf,
     };
+
     OpenWindow(&buffer);
+
     int XOffset = 0, YOffset = 0;
     while(HandleLoop(&buffer) == 0)
     {
@@ -190,5 +194,8 @@ main(int argc, char *argv[])
         XOffset++;
         YOffset++;
     }
+
     XCloseDisplay(buffer.dpy);
+
+    return 0;
 }
