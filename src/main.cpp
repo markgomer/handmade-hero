@@ -149,7 +149,6 @@ HandleLoop(struct Buffer* buffer)
             } break;
             case KeyRelease:
             {
-                    printf("WHATIS THIS?\n");
                 int m = ev.xkey.state;
                 int k = XkbKeycodeToKeysym(buffer->dpy, ev.xkey.keycode, 0, 0);
                 for (uint32_t i = 0; i < 124; i += 2)
@@ -165,7 +164,6 @@ HandleLoop(struct Buffer* buffer)
             } break;
             case ConfigureNotify:  // Window resizing
             {
-                printf("DEPLOYED!\n");
                 XConfigureEvent xce = ev.xconfigure;
                 if (xce.width != buffer->width || xce.height != buffer->height)
                 {
