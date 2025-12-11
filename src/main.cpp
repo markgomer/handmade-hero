@@ -55,6 +55,11 @@ RenderWeirdGradient_rw(Buffer* Window, int BlueOffset, int GreenOffset)
     }
 }
 
+/*
+ * This algorithm uses the pixels on a memory buffer as a data structure and we
+ * go on hoping with the pointers on each of them to make a cool, weird drawing
+ * on memory.
+*/
 internal void
 RenderWeirdGradient(Buffer* Window, int BlueOffset, int GreenOffset)
 {
