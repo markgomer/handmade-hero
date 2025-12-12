@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <linux/input.h>
 
 #define internal        static
 #define local_persist   static
@@ -22,6 +23,9 @@ struct Buffer {
     int x;
     int y;
     int mouse;
+    /* For animation */
+    int XOffset;
+    int YOffset;
     /* Linux(X11) specifics */
     Display *dpy;
     Window w;
@@ -68,7 +72,7 @@ RenderWeirdGradient_rw(Buffer* Window, int BlueOffset, int GreenOffset)
  * on memory.
 */
 internal void
-RenderWeirdGradient(Buffer* Window, int BlueOffset, int GreenOffset)
+RenderWeirdGradient(Buffer* Window)
 {
     uint8_t BytesPerPixel = 4;
     int Pitch = Window->width * BytesPerPixel; // size of the line (pitch)
@@ -80,8 +84,8 @@ RenderWeirdGradient(Buffer* Window, int BlueOffset, int GreenOffset)
         uint32_t* Pixel = (uint32_t*)Row; // points to the first pixen on the row
         for(int X = 0; X < Window->width; ++X)
         {
-            uint8_t Blue = (X + BlueOffset);
-            uint8_t Green = (Y + GreenOffset);
+            uint8_t Blue = (X + Window->XOffset);
+            uint8_t Green = (Y + Window->YOffset);
 
             // blue is in the big end, green in the next 8 bytes.
             // they'll be offset
@@ -120,12 +124,6 @@ OpenWindow(struct Buffer* buffer)
 }
 
 internal void
-HandleInput()
-{
-
-}
-
-internal void
 sleeper(int64_t ms)
 {
     struct timespec ts;
@@ -143,9 +141,64 @@ get_yer_time(void)
 }
 
 internal int
+HandleInput(Buffer* b)
+{
+    int has_keys = 0;
+    char string[32];
+    char* p = string;
+
+    // let's check if any key press was stored in the buffer
+    for (int i = 0; i < 128; i++)
+    {
+        if (b->keys[i])
+        {
+            has_keys = 1;
+            *p++ = i;
+        }
+    }
+    *p = '\0';
+
+    // fenster_text(&buffer, 8, 8, string, 4, 0xffffff);
+    if (has_keys)
+    {
+        // so to remember:
+        // mod is a 4 bits mask, ctrl=1, shift=2, alt=4, meta=8
+        if (b->mod & 1)
+        {
+            // fenster_text(&buffer, 8, 40, "Ctrl", 4, 0xffffff);
+        }
+        if (b->mod & 2)
+        {
+            // fenster_text(&buffer, 8, 80, "Shift", 4, 0xffffff);
+        }
+    }
+    if (b->keys[27]) // XK_Escape
+    {
+        return 1;
+    }
+    if (b->keys[17]) // XK_Up
+    {
+        b->YOffset+=2;
+    }
+    if (b->keys[18]) // XK_Down
+    {
+        b->YOffset-=2;
+    }
+    if (b->keys[19]) // XK_Right
+    {
+        b->XOffset-=2;
+    }
+    if (b->keys[20]) // XK_Left
+    {
+        b->XOffset+=2;
+    }
+    return (0);
+}
+
+internal int
 HandleLoop(struct Buffer* buffer)
 {
-    uint8_t ShouldQuit = 0;
+    uint8_t shouldQuit = 0;
     XEvent ev;
     // NOTE: This is where the buffer appears!
     XPutImage(buffer->dpy, buffer->w, buffer->gc, buffer->img, 0, 0, 0, 0,
@@ -213,12 +266,12 @@ HandleLoop(struct Buffer* buffer)
                 if (ev.xclient.data.l[0] ==
                         (long)XInternAtom(buffer->dpy, "WM_DELETE_WINDOW", False))
                 {
-                    ShouldQuit = 1;
+                    shouldQuit = 1;
                 }
             } break;
         }
     }
-    return ShouldQuit;
+    return shouldQuit;
 }
 
 int
@@ -235,63 +288,10 @@ main(int argc, char *argv[])
 
     OpenWindow(&buffer);
 
-    int XOffset = 0, YOffset = 0;
     int64_t now = get_yer_time();
-    while(HandleLoop(&buffer) == 0)
+    while(HandleLoop(&buffer) == 0 && HandleInput(&buffer) == 0)
     {
-        RenderWeirdGradient(&buffer, XOffset, YOffset);
-        // TODO: Fill that thing!
-        HandleInput();
-
-        int has_keys = 0;
-        char string[32];
-        char* p = string;
-
-        // let's check if any key press was stored in the buffer
-        for (int i = 0; i < 128; i++)
-        {
-            if (buffer.keys[i])
-            {
-                has_keys = 1;
-                *p++ = i;
-            }
-        }
-        *p = '\0';
-
-        // fenster_text(&buffer, 8, 8, string, 4, 0xffffff);
-        if (has_keys)
-        {
-            // so to remember:
-            // mod is a 4 bits mask, ctrl=1, shift=2, alt=4, meta=8
-            if (buffer.mod & 1)
-            {
-                // fenster_text(&buffer, 8, 40, "Ctrl", 4, 0xffffff);
-            }
-            if (buffer.mod & 2)
-            {
-                // fenster_text(&buffer, 8, 80, "Shift", 4, 0xffffff);
-            }
-        }
-        if (buffer.keys[27]) // XK_Escape
-        {
-            break;
-        }
-        if (buffer.keys[17]) // XK_Up
-        {
-            YOffset+=2;
-        }
-        if (buffer.keys[18]) // XK_Down
-        {
-            YOffset-=2;
-        }
-        if (buffer.keys[19]) // XK_Right
-        {
-            XOffset-=2;
-        }
-        if (buffer.keys[20]) // XK_Left
-        {
-            XOffset+=2;
-        }
+        RenderWeirdGradient(&buffer);
 
         int64_t time = get_yer_time();
         if (time - now < 1000 / 60)
