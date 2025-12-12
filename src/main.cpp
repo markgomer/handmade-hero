@@ -1,10 +1,10 @@
 #include <X11/Xlib.h>
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
-#include <cstdint>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 #define internal        static
 #define local_persist   static
@@ -119,12 +119,35 @@ OpenWindow(struct Buffer* buffer)
     return 0;
 }
 
+internal void
+HandleInput()
+{
+
+}
+
+internal void
+sleeper(int64_t ms)
+{
+    struct timespec ts;
+    ts.tv_sec = ms / 1000;
+    ts.tv_nsec = (ms % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+}
+
+internal int64_t
+get_yer_time(void)
+{
+    struct timespec time;
+    clock_gettime(CLOCK_REALTIME, &time);
+    return time.tv_sec * 1000 + (time.tv_nsec / 1000000);
+}
+
 internal int
 HandleLoop(struct Buffer* buffer)
 {
     uint8_t ShouldQuit = 0;
     XEvent ev;
-    // This is where the buffer appears!
+    // NOTE: This is where the buffer appears!
     XPutImage(buffer->dpy, buffer->w, buffer->gc, buffer->img, 0, 0, 0, 0,
               buffer->width, buffer->height);
 
@@ -145,8 +168,6 @@ HandleLoop(struct Buffer* buffer)
                 buffer->x = ev.xmotion.x, buffer->y = ev.xmotion.y;
             } break;
             case KeyPress:
-            {
-            } break;
             case KeyRelease:
             {
                 int m = ev.xkey.state;
@@ -215,11 +236,70 @@ main(int argc, char *argv[])
     OpenWindow(&buffer);
 
     int XOffset = 0, YOffset = 0;
+    int64_t now = get_yer_time();
     while(HandleLoop(&buffer) == 0)
     {
         RenderWeirdGradient(&buffer, XOffset, YOffset);
-        XOffset++;
-        YOffset++;
+        // TODO: Fill that thing!
+        HandleInput();
+
+        int has_keys = 0;
+        char string[32];
+        char* p = string;
+
+        // let's check if any key press was stored in the buffer
+        for (int i = 0; i < 128; i++)
+        {
+            if (buffer.keys[i])
+            {
+                has_keys = 1;
+                *p++ = i;
+            }
+        }
+        *p = '\0';
+
+        // fenster_text(&buffer, 8, 8, string, 4, 0xffffff);
+        if (has_keys)
+        {
+            // so to remember:
+            // mod is a 4 bits mask, ctrl=1, shift=2, alt=4, meta=8
+            if (buffer.mod & 1)
+            {
+                // fenster_text(&buffer, 8, 40, "Ctrl", 4, 0xffffff);
+            }
+            if (buffer.mod & 2)
+            {
+                // fenster_text(&buffer, 8, 80, "Shift", 4, 0xffffff);
+            }
+        }
+        if (buffer.keys[27]) // XK_Escape
+        {
+            break;
+        }
+        if (buffer.keys[17]) // XK_Up
+        {
+            YOffset+=2;
+        }
+        if (buffer.keys[18]) // XK_Down
+        {
+            YOffset-=2;
+        }
+        if (buffer.keys[19]) // XK_Right
+        {
+            XOffset-=2;
+        }
+        if (buffer.keys[20]) // XK_Left
+        {
+            XOffset+=2;
+        }
+
+        int64_t time = get_yer_time();
+        if (time - now < 1000 / 60)
+        {
+            sleeper(time - now);
+        }
+        now = time;
+
     }
 
     XCloseDisplay(buffer.dpy);
