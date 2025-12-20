@@ -1,23 +1,30 @@
-#include <X11/Xlib.h>
-#include <X11/XKBlib.h>
-#include <X11/keysym.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+
 #include <linux/input.h>
+#include <linux/joystick.h>
+
+#include <X11/Xlib.h>
+#include <X11/XKBlib.h>
+#include <X11/keysym.h>
 
 #define internal        static
 #define local_persist   static
 #define global_variable static
 
 #define pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
+#define MAX_CONTROLLERS 4
 
 struct Buffer {
     const char *title;
     int width;
     int height;
-    uint32_t *buf;
+    uint32_t* buf;
     int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
     int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
     int x;
@@ -27,14 +34,30 @@ struct Buffer {
     int XOffset;
     int YOffset;
     /* Linux(X11) specifics */
-    Display *dpy;
+    Display* dpy;
     Window w;
     GC gc;
     XImage *img;
 };
 
+typedef struct {
+    short left_stick_x; // -32767 to 32767
+    short left_stick_y;
+    short right_stick_x;
+    short right_stick_y;
+    unsigned char left_trigger; // 0-255
+    unsigned char right_trigger;
+    unsigned short buttons; // bitmask A=0x0001, B=0x0002, etc. 0000_0000_0000_YXBA
+    char dpad_x; // -1,0,1
+    char dpad_y;
+    uint32_t connected;
+} XInputState;
+
+global_variable int GLOBAL_JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
+global_variable XInputState GLOBAL_JoyStates[MAX_CONTROLLERS];
+
 /* from https://github.com/zserge/fenster/blob/main/fenster.h */
-static int FENSTER_KEYCODES[124] = {XK_BackSpace,8,XK_Delete,127,XK_Down,18,XK_End,5,XK_Escape,27,XK_Home,2,XK_Insert,26,XK_Left,20,XK_Page_Down,4,XK_Page_Up,3,XK_Return,10,XK_Right,19,XK_Tab,9,XK_Up,17,XK_apostrophe,39,XK_backslash,92,XK_bracketleft,91,XK_bracketright,93,XK_comma,44,XK_equal,61,XK_grave,96,XK_minus,45,XK_period,46,XK_semicolon,59,XK_slash,47,XK_space,32,XK_a,65,XK_b,66,XK_c,67,XK_d,68,XK_e,69,XK_f,70,XK_g,71,XK_h,72,XK_i,73,XK_j,74,XK_k,75,XK_l,76,XK_m,77,XK_n,78,XK_o,79,XK_p,80,XK_q,81,XK_r,82,XK_s,83,XK_t,84,XK_u,85,XK_v,86,XK_w,87,XK_x,88,XK_y,89,XK_z,90,XK_0,48,XK_1,49,XK_2,50,XK_3,51,XK_4,52,XK_5,53,XK_6,54,XK_7,55,XK_8,56,XK_9,57};
+const global_variable int FENSTER_KEYCODES[124] = {XK_BackSpace,8,XK_Delete,127,XK_Down,18,XK_End,5,XK_Escape,27,XK_Home,2,XK_Insert,26,XK_Left,20,XK_Page_Down,4,XK_Page_Up,3,XK_Return,10,XK_Right,19,XK_Tab,9,XK_Up,17,XK_apostrophe,39,XK_backslash,92,XK_bracketleft,91,XK_bracketright,93,XK_comma,44,XK_equal,61,XK_grave,96,XK_minus,45,XK_period,46,XK_semicolon,59,XK_slash,47,XK_space,32,XK_a,65,XK_b,66,XK_c,67,XK_d,68,XK_e,69,XK_f,70,XK_g,71,XK_h,72,XK_i,73,XK_j,74,XK_k,75,XK_l,76,XK_m,77,XK_n,78,XK_o,79,XK_p,80,XK_q,81,XK_r,82,XK_s,83,XK_t,84,XK_u,85,XK_v,86,XK_w,87,XK_x,88,XK_y,89,XK_z,90,XK_0,48,XK_1,49,XK_2,50,XK_3,51,XK_4,52,XK_5,53,XK_6,54,XK_7,55,XK_8,56,XK_9,57};
 
 internal void
 MaDraw(Buffer* buffer)
@@ -124,7 +147,7 @@ OpenWindow(struct Buffer* buffer)
 }
 
 internal void
-sleeper(int64_t ms)
+Sleeper(int64_t ms)
 {
     struct timespec ts;
     ts.tv_sec = ms / 1000;
@@ -133,11 +156,144 @@ sleeper(int64_t ms)
 }
 
 internal int64_t
-get_yer_time(void)
+GetYerTime(void)
 {
     struct timespec time;
     clock_gettime(CLOCK_REALTIME, &time);
     return time.tv_sec * 1000 + (time.tv_nsec / 1000000);
+}
+
+// Opens a joystick device if it exists
+int joy_open(int index)
+{
+    char path[32];
+    snprintf(path, sizeof(path), "/dev/input/js%d", index);
+
+    int fd = open(path, O_RDONLY | O_NONBLOCK);
+    if (fd < 0)
+    {
+        return -1;  // not present or no permission
+    }
+
+    // Optional: get info to confirm it's really a gamepad
+    char name[256] = "Unknown";
+    char axes = 0, buttons = 0;
+    ioctl(fd, JSIOCGNAME(sizeof(name)), name);
+    ioctl(fd, JSIOCGAXES, &axes);
+    ioctl(fd, JSIOCGBUTTONS, &buttons);
+
+    printf("Controller %d connected: %s (%d axes, %d buttons)\n", index, name, axes, buttons);
+
+    return fd;
+}
+
+void
+JoyClose()
+{
+    for (int i = 0; i < MAX_CONTROLLERS; i++)
+    {
+        if (GLOBAL_JoyFDs[i] >= 0)
+        {
+            close(GLOBAL_JoyFDs[i]);
+        }
+    }
+}
+
+// Call this once at startup
+void
+JoyInit()
+{
+    for (int i = 0; i < MAX_CONTROLLERS; i++)
+    {
+        GLOBAL_JoyFDs[i] = joy_open(i);
+        GLOBAL_JoyStates[i].connected = (GLOBAL_JoyFDs[i] >= 0);
+    }
+}
+
+void
+JoySetStates()
+{
+    for (int i = 0; i < MAX_CONTROLLERS; i++)
+    {
+        if (GLOBAL_JoyFDs[i] < 0)
+        {
+            continue; // skip loop if not connected
+        }
+
+        struct js_event ev;
+        XInputState* state = &GLOBAL_JoyStates[i];
+
+        // Reset per-frame changes if needed (we'll rebuild)
+        // But we just accumulate latest values
+        while (read(GLOBAL_JoyFDs[i], &ev, sizeof(ev)) == sizeof(ev))
+        {
+            if (ev.type & JS_EVENT_BUTTON)
+            {
+                if (ev.value)
+                {
+                    state->buttons |=  (1 << ev.number); // pressed
+                }
+                else
+                {
+                    state->buttons &= ~(1 << ev.number); // released
+                }
+            }
+            else if (ev.type & JS_EVENT_AXIS)
+            {
+                switch (ev.number)
+                {
+                    case 0:
+                    {
+                        state->left_stick_x  = ev.value;
+                    } break;
+                    case 1:
+                    {
+                        state->left_stick_y  = ev.value;
+                    } break;
+                    case 2:
+                    {
+                        state->left_trigger  = (ev.value + 32767) / 257; // -32767..32767 → 0..255
+                    } break;
+                    case 3:
+                    {
+                        state->right_stick_x = ev.value;
+                    } break;
+                    case 4:
+                    {
+                        state->right_stick_y = ev.value;
+                    } break;
+                    case 5:
+                    {
+                        state->right_trigger = (ev.value + 32767) / 257;
+                    } break;
+                    case 6:
+                    {
+                        state->dpad_x = (ev.value < -10000) ? -1 : (ev.value > 10000 ? 1 : 0);
+                    } break;
+                    case 7:
+                    {
+                        state->dpad_y = (ev.value < -10000) ? -1 : (ev.value > 10000 ? 1 : 0);
+                    } break;
+                }
+            }
+        }
+    }
+}
+
+void
+JoyHotplug()
+{
+    for (int i = 0; i < MAX_CONTROLLERS; i++)
+    {
+        if (GLOBAL_JoyFDs[i] < 0)
+        {
+            GLOBAL_JoyFDs[i] = joy_open(i);
+            if (GLOBAL_JoyFDs[i] >= 0)
+            {
+                GLOBAL_JoyStates[i].connected = 1;
+            }
+        }
+    }
 }
 
 internal int
@@ -287,21 +443,29 @@ main(int argc, char *argv[])
     };
 
     OpenWindow(&buffer);
+    JoyInit();
 
-    int64_t now = get_yer_time();
+    int64_t now = GetYerTime();
     while(HandleLoop(&buffer) == 0 && HandleInput(&buffer) == 0)
     {
         RenderWeirdGradient(&buffer);
 
-        int64_t time = get_yer_time();
+        JoyHotplug();
+        JoySetStates();
+        if(GLOBAL_JoyStates->dpad_x > 0) buffer.XOffset-=2;
+        else if(GLOBAL_JoyStates->dpad_x < 0) buffer.XOffset+=2;
+        if(GLOBAL_JoyStates->dpad_y > 0) buffer.YOffset-=2;
+        else if(GLOBAL_JoyStates->dpad_y < 0) buffer.YOffset+=2;
+
+        int64_t time = GetYerTime();
         if (time - now < 1000 / 60)
         {
-            sleeper(time - now);
+            Sleeper(time - now);
         }
         now = time;
-
     }
 
+    JoyClose();
     XCloseDisplay(buffer.dpy);
 
     return 0;
