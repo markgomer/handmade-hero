@@ -8,10 +8,10 @@
 
 #include <linux/input.h>
 #include <linux/joystick.h>
-
 #include <X11/Xlib.h>
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
+#include <alsa/asoundlib.h>
 
 #define internal        static
 #define local_persist   static
@@ -20,7 +20,16 @@
 #define pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
 #define MAX_CONTROLLERS 4
 
-struct Buffer {
+#ifndef FENSTER_SAMPLE_RATE
+#define FENSTER_SAMPLE_RATE 44100
+#endif
+
+#ifndef FENSTER_AUDIO_BUFSZ
+#define FENSTER_AUDIO_BUFSZ 8192
+#endif
+
+struct Buffer
+{
     const char *title;
     int width;
     int height;
@@ -40,7 +49,8 @@ struct Buffer {
     XImage *img;
 };
 
-typedef struct {
+typedef struct
+{
     short left_stick_x; // -32767 to 32767
     short left_stick_y;
     short right_stick_x;
@@ -53,11 +63,73 @@ typedef struct {
     uint32_t connected;
 } XInputState;
 
+struct fenster_audio
+{
+  snd_pcm_t* pcm;
+  float buf[FENSTER_AUDIO_BUFSZ];
+  size_t pos;
+};
+
 global_variable int GLOBAL_JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
 global_variable XInputState GLOBAL_JoyStates[MAX_CONTROLLERS];
 
 /* from https://github.com/zserge/fenster/blob/main/fenster.h */
 const global_variable int FENSTER_KEYCODES[124] = {XK_BackSpace,8,XK_Delete,127,XK_Down,18,XK_End,5,XK_Escape,27,XK_Home,2,XK_Insert,26,XK_Left,20,XK_Page_Down,4,XK_Page_Up,3,XK_Return,10,XK_Right,19,XK_Tab,9,XK_Up,17,XK_apostrophe,39,XK_backslash,92,XK_bracketleft,91,XK_bracketright,93,XK_comma,44,XK_equal,61,XK_grave,96,XK_minus,45,XK_period,46,XK_semicolon,59,XK_slash,47,XK_space,32,XK_a,65,XK_b,66,XK_c,67,XK_d,68,XK_e,69,XK_f,70,XK_g,71,XK_h,72,XK_i,73,XK_j,74,XK_k,75,XK_l,76,XK_m,77,XK_n,78,XK_o,79,XK_p,80,XK_q,81,XK_r,82,XK_s,83,XK_t,84,XK_u,85,XK_v,86,XK_w,87,XK_x,88,XK_y,89,XK_z,90,XK_0,48,XK_1,49,XK_2,50,XK_3,51,XK_4,52,XK_5,53,XK_6,54,XK_7,55,XK_8,56,XK_9,57};
+
+int snd_pcm_open(snd_pcm_t** pcm, const char* name, snd_pcm_stream_t stream,
+                 int mode);
+int snd_pcm_set_params(snd_pcm_t *pcm, snd_pcm_format_t format,
+                       snd_pcm_access_t access, unsigned int channels,
+                       unsigned int rate, int soft_resample,
+                       unsigned int latency);
+snd_pcm_sframes_t snd_pcm_avail(snd_pcm_t *pcm);
+snd_pcm_sframes_t snd_pcm_writei(snd_pcm_t *pcm, const void *buffer,
+                                 snd_pcm_uframes_t size);
+int snd_pcm_recover(void *, int, int);
+int snd_pcm_recover(snd_pcm_t *pcm, int err, int silent);
+int snd_pcm_close(snd_pcm_t *pcm);
+
+
+internal int
+fenster_audio_open(struct fenster_audio* fa)
+{
+    if (snd_pcm_open(&fa->pcm, "default", (snd_pcm_stream_t)0, 0))
+    {
+        return -1;
+    }
+    unsigned short IsLittleEndian = 1;
+    int fmt = (*(char*)(&IsLittleEndian)) ? 14 : 15;
+    return snd_pcm_set_params(fa->pcm, (snd_pcm_format_t)fmt,
+                              (snd_pcm_access_t)3, 1, FENSTER_SAMPLE_RATE, 1,
+                              100000);
+}
+
+internal int
+fenster_audio_available(struct fenster_audio *fa)
+{
+    int n = snd_pcm_avail(fa->pcm);
+    if (n < 0)
+    {
+        snd_pcm_recover(fa->pcm, n, 0);
+    }
+    return n;
+}
+
+internal void
+fenster_audio_write(struct fenster_audio *fa, float *buf, size_t n)
+{
+    int r = snd_pcm_writei(fa->pcm, buf, n);
+    if (r < 0)
+    {
+        snd_pcm_recover(fa->pcm, r, 0);
+    }
+}
+
+internal void
+fenster_audio_close(struct fenster_audio *fa)
+{
+    snd_pcm_close(fa->pcm);
+}
 
 internal void
 MaDraw(Buffer* buffer)
