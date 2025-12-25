@@ -9,10 +9,10 @@
 
 #include <linux/input.h>
 #include <linux/joystick.h>
-
 #include <X11/Xlib.h>
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
+#include <alsa/asoundlib.h>
 
 #define internal        static
 #define local_persist   static
@@ -21,7 +21,16 @@
 #define pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
 #define MAX_CONTROLLERS 4
 
-struct Buffer {
+#ifndef FENSTER_SAMPLE_RATE
+#define FENSTER_SAMPLE_RATE 44100
+#endif
+
+#ifndef FENSTER_AUDIO_BUFSZ
+#define FENSTER_AUDIO_BUFSZ 8192
+#endif
+
+struct Buffer
+{
     const char *title;
     int width;
     int height;
@@ -41,7 +50,8 @@ struct Buffer {
     XImage *img;
 };
 
-typedef struct {
+typedef struct
+{
     short left_stick_x; // -32767 to 32767
     short left_stick_y;
     short right_stick_x;
