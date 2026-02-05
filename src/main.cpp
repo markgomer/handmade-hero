@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -53,11 +54,94 @@ typedef struct {
     uint32_t connected;
 } XInputState;
 
+typedef struct
+{
+  snd_pcm_t* pcm;
+  float buf[FENSTER_AUDIO_BUFSZ];
+  size_t pos;
+} AudioBuffer;
+
 global_variable int GLOBAL_JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
 global_variable XInputState GLOBAL_JoyStates[MAX_CONTROLLERS];
 
 /* from https://github.com/zserge/fenster/blob/main/fenster.h */
 const global_variable int FENSTER_KEYCODES[124] = {XK_BackSpace,8,XK_Delete,127,XK_Down,18,XK_End,5,XK_Escape,27,XK_Home,2,XK_Insert,26,XK_Left,20,XK_Page_Down,4,XK_Page_Up,3,XK_Return,10,XK_Right,19,XK_Tab,9,XK_Up,17,XK_apostrophe,39,XK_backslash,92,XK_bracketleft,91,XK_bracketright,93,XK_comma,44,XK_equal,61,XK_grave,96,XK_minus,45,XK_period,46,XK_semicolon,59,XK_slash,47,XK_space,32,XK_a,65,XK_b,66,XK_c,67,XK_d,68,XK_e,69,XK_f,70,XK_g,71,XK_h,72,XK_i,73,XK_j,74,XK_k,75,XK_l,76,XK_m,77,XK_n,78,XK_o,79,XK_p,80,XK_q,81,XK_r,82,XK_s,83,XK_t,84,XK_u,85,XK_v,86,XK_w,87,XK_x,88,XK_y,89,XK_z,90,XK_0,48,XK_1,49,XK_2,50,XK_3,51,XK_4,52,XK_5,53,XK_6,54,XK_7,55,XK_8,56,XK_9,57};
+
+/* alsa driver functions */
+int snd_pcm_open(snd_pcm_t** pcm, const char* name, snd_pcm_stream_t stream,
+                 int mode);
+int snd_pcm_set_params(snd_pcm_t *pcm, snd_pcm_format_t format,
+                       snd_pcm_access_t access, unsigned int channels,
+                       unsigned int rate, int soft_resample,
+                       unsigned int latency);
+snd_pcm_sframes_t snd_pcm_avail(snd_pcm_t *pcm);
+snd_pcm_sframes_t snd_pcm_writei(snd_pcm_t *pcm, const void *buffer,
+                                 snd_pcm_uframes_t size);
+int snd_pcm_recover(void *, int, int);
+int snd_pcm_recover(snd_pcm_t *pcm, int err, int silent);
+int snd_pcm_close(snd_pcm_t *pcm);
+
+
+internal int
+fenster_audio_open(AudioBuffer* audioBuffer)
+{
+    int err = snd_pcm_open(&audioBuffer->pcm, "default",
+                            SND_PCM_STREAM_PLAYBACK, 0);
+    if (err < 0)
+    {
+        fprintf(stderr, "Cannot open PCM device: %s\n", snd_strerror(err));
+        return -1;
+    }
+    unsigned short IsLittleEndian = 1;
+    int fmt = (*(char*)(&IsLittleEndian)) ? 14 : 15;
+    return snd_pcm_set_params(audioBuffer->pcm, (snd_pcm_format_t)fmt,
+                              (snd_pcm_access_t)3, 1, FENSTER_SAMPLE_RATE, 1,
+                              100000);
+}
+
+internal int
+fenster_audio_available(AudioBuffer* audioBuffer)
+{
+    int n = snd_pcm_avail(audioBuffer->pcm);
+    if (n < 0)
+    {
+        snd_pcm_recover(audioBuffer->pcm, n, 0);
+    }
+    return n;
+}
+
+internal void
+fenster_audio_write(AudioBuffer* audioBuffer, float* buf, size_t n)
+{
+    int r = snd_pcm_writei(audioBuffer->pcm, buf, n);
+    if (r < 0)
+    {
+        snd_pcm_recover(audioBuffer->pcm, r, 0);
+    }
+}
+
+internal void
+fenster_audio_close(AudioBuffer* audioBuffer)
+{
+    snd_pcm_close(audioBuffer->pcm);
+}
+
+internal void
+WriteAudio(AudioBuffer* audioBuffer, uint32_t* u)
+{
+        int n = fenster_audio_available(audioBuffer);
+        if (n > 0)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                u++;
+                /*audio[i] = (rand() & 0xff)/256.f;*/
+                int x = *u * 80 / 441;
+                audioBuffer->buf[i] = ((((x >> 10) & 42) * x) & 0xff) / 256.f;
+            }
+            fenster_audio_write(audioBuffer, audioBuffer->buf, n);
+        }
+}
 
 internal void
 MaDraw(Buffer* buffer)
@@ -118,6 +202,26 @@ RenderWeirdGradient(Buffer* Window)
     }
 }
 
+internal void
+RenderThings(Buffer* buffer, uint32_t* t)
+{
+    t++;
+    for (int i = 0; i < 320; i++)
+    {
+        for (int j = 0; j < 240; j++)
+        {
+            /* White noise: */
+            /* fenster_pixel(&f, i, j) = (rand() << 16) ^ (rand() << 8) ^ rand(); */
+
+            /* Colourful and moving: */
+            /* fenster_pixel(&f, i, j) = i * j * t; */
+
+            /* Munching squares: */
+            pixel(buffer, i, j) = i ^ j ^ *t;
+        }
+    }
+}
+
 internal int
 OpenWindow(struct Buffer* buffer)
 {
@@ -164,7 +268,8 @@ GetYerTime(void)
 }
 
 // Opens a joystick device if it exists
-int joy_open(int index)
+internal int
+joy_open(int index)
 {
     char path[32];
     snprintf(path, sizeof(path), "/dev/input/js%d", index);
@@ -187,7 +292,7 @@ int joy_open(int index)
     return fd;
 }
 
-void
+internal void
 JoyClose()
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
@@ -200,7 +305,7 @@ JoyClose()
 }
 
 // Call this once at startup
-void
+internal void
 JoyInit()
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
@@ -210,7 +315,7 @@ JoyInit()
     }
 }
 
-void
+internal void
 JoySetStates()
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
@@ -280,7 +385,7 @@ JoySetStates()
     }
 }
 
-void
+internal void
 JoyHotplug()
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
@@ -445,10 +550,16 @@ main(int argc, char *argv[])
     OpenWindow(&buffer);
     JoyInit();
 
+    AudioBuffer audioBuffer = {0};
+    fenster_audio_open(&audioBuffer);
+    uint32_t t = 0, u = 0;
+
     int64_t now = GetYerTime();
     while(HandleLoop(&buffer) == 0 && HandleInput(&buffer) == 0)
     {
         RenderWeirdGradient(&buffer);
+        // RenderThings(&buffer, &t);
+        WriteAudio(&audioBuffer, &u);
 
         JoyHotplug();
         JoySetStates();
@@ -457,6 +568,7 @@ main(int argc, char *argv[])
         if(GLOBAL_JoyStates->dpad_y > 0) buffer.YOffset-=2;
         else if(GLOBAL_JoyStates->dpad_y < 0) buffer.YOffset+=2;
 
+
         int64_t time = GetYerTime();
         if (time - now < 1000 / 60)
         {
@@ -464,7 +576,7 @@ main(int argc, char *argv[])
         }
         now = time;
     }
-
+    fenster_audio_close(&audioBuffer);
     JoyClose();
     XCloseDisplay(buffer.dpy);
 
