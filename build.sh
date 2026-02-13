@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 mkdir -p ./build
 
@@ -9,7 +9,7 @@ pushd build/
 # -Wall: all warning messages
 # prefix-map is for debugging inside the container:
 # -fdebug-prefix-map=/var/home=/run/host/var/home \
-g++ -g -Wall  \
+g++ -g -Wall -O0 \
 ../src/main.cpp -o main \
 -lX11 -lasound
 
