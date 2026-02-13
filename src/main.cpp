@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdint>
 #include <stdint.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@
 
 #define pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
 #define MAX_CONTROLLERS 4
+#define M_PI 3.1415
 
 #ifndef FENSTER_SAMPLE_RATE
 #define FENSTER_SAMPLE_RATE 44100
@@ -66,9 +68,12 @@ typedef struct
 
 typedef struct
 {
-  snd_pcm_t* pcm;
-  float buf[FENSTER_AUDIO_BUFSZ];
-  size_t pos;
+    snd_pcm_t* pcm;
+    float buf[FENSTER_AUDIO_BUFSZ];
+    uint32_t RunningSampleIndex;
+    int SamplesPerSecond;
+    int ToneHz;
+    float ToneVolume;
 } AudioBuffer;
 
 global_variable int GLOBAL_JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
@@ -137,17 +142,22 @@ fenster_audio_close(AudioBuffer* audioBuffer)
 }
 
 internal void
-WriteAudio(AudioBuffer* audioBuffer, uint32_t* u)
+WriteAudio(AudioBuffer* audioBuffer)
 {
         int n = fenster_audio_available(audioBuffer);
         if (n > 0)
         {
             for (int i = 0; i < n; i++)
             {
-                u++;
+                // float t = (float)audioBuffer->RunningSampleIndex / (float)audioBuffer->SamplesPerSecond;
+                // float sineValue = sinf(2.0f * M_PI * audioBuffer->ToneHz * t);
+                // audioBuffer->buf[i] = sineValue * soundState->ToneVolume;
+
                 /*audio[i] = (rand() & 0xff)/256.f;*/
-                int x = *u * 80 / 441;
+
+                int x = (float) audioBuffer->RunningSampleIndex * 80 / 441;
                 audioBuffer->buf[i] = ((((x >> 10) & 42) * x) & 0xff) / 256.f;
+                audioBuffer->RunningSampleIndex++;
             }
             fenster_audio_write(audioBuffer, audioBuffer->buf, n);
         }
@@ -560,16 +570,20 @@ main(int argc, char *argv[])
     OpenWindow(&buffer);
     JoyInit();
 
-    AudioBuffer audioBuffer = {0};
+    AudioBuffer audioBuffer = {
+        .RunningSampleIndex = 0,
+        .SamplesPerSecond = 48000,
+        .ToneHz = 256,
+        .ToneVolume = 0.3f
+    };
     fenster_audio_open(&audioBuffer);
-    uint32_t t = 0, u = 0;
 
     int64_t now = GetYerTime();
     while(HandleLoop(&buffer) == 0 && HandleInput(&buffer) == 0)
     {
         RenderWeirdGradient(&buffer);
         // RenderThings(&buffer, &t);
-        WriteAudio(&audioBuffer, &u);
+        WriteAudio(&audioBuffer);
 
         JoyHotplug();
         JoySetStates();
