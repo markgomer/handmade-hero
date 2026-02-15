@@ -32,15 +32,12 @@
 
 struct Buffer
 {
+    int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
     Window w; // X11 window
     GC gc; // graphics context
-    Display* dpy; // XDisplay
-    XImage *img;
-    uint32_t* buf; // buffer to be filled to the XImage
 
     int WindowWidth;
     int WindowHeight;
-    int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
     int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
     int x;
     int y;
@@ -49,31 +46,34 @@ struct Buffer
     int XOffset; // test animation
     int YOffset;
 
-    const char *WindowTitle;
+    const char* WindowTitle;
+    Display* dpy; // XDisplay
+    XImage* img;
+    uint32_t* buf; // buffer to be filled to the XImage
 };
 
 typedef struct
 {
+    uint32_t connected;
     short left_stick_x; // -32767 to 32767
     short left_stick_y;
     short right_stick_x;
     short right_stick_y;
+    unsigned short buttons; // bitmask A=0x0001, B=0x0002, etc. 0000_0000_0000_YXBA
     unsigned char left_trigger; // 0-255
     unsigned char right_trigger;
-    unsigned short buttons; // bitmask A=0x0001, B=0x0002, etc. 0000_0000_0000_YXBA
     char dpad_x; // -1,0,1
     char dpad_y;
-    uint32_t connected;
 } XInputState;
 
 typedef struct
 {
+    float buf[FENSTER_AUDIO_BUFSZ];
     uint32_t RunningSampleIndex;
     int SamplesPerSecond;
     int ToneHz;
     float ToneVolume;
     snd_pcm_t* pcm;
-    float buf[FENSTER_AUDIO_BUFSZ];
 } AudioBuffer;
 
 global_variable int GLOBAL_JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
@@ -561,10 +561,10 @@ main(int argc, char *argv[])
     int W = 600, H = 480;
     uint32_t *buf = (uint32_t*)malloc(W * H * sizeof(uint32_t));
     struct Buffer buffer = {
-        .buf = buf,
         .WindowWidth = W,
         .WindowHeight = H,
         .WindowTitle = "hello",
+        .buf = buf,
     };
 
     OpenWindow(&buffer);
