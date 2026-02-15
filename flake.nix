@@ -7,10 +7,7 @@
 
   outputs = { self, nixpkgs }:
     let
-      # Systems to support
       systems = [ "x86_64-linux" ];
-
-      # Helper to generate an attribute set for each system
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in
     {
@@ -19,11 +16,15 @@
           pkgs = nixpkgs.legacyPackages.${system};
         in
         {
-          default = pkgs.mkShellNoCC {
+          default = pkgs.mkShell {
             packages = [
+              pkgs.gcc
               pkgs.clang-tools
+            ];
+
+            buildInputs = [
               pkgs.libx11
-              pkgs.neovim
+              pkgs.alsa-lib
             ];
           };
         }
