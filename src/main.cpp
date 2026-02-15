@@ -151,7 +151,7 @@ WriteAudio(AudioBuffer* audioBuffer)
             {
                 // float t = (float)audioBuffer->RunningSampleIndex / (float)audioBuffer->SamplesPerSecond;
                 // float sineValue = sinf(2.0f * M_PI * audioBuffer->ToneHz * t);
-                // audioBuffer->buf[i] = sineValue * soundState->ToneVolume;
+                // audioBuffer->buf[i] = sineValue * audioBuffer->ToneVolume;
 
                 /*audio[i] = (rand() & 0xff)/256.f;*/
 
