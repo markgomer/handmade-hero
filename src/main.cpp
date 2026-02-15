@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdint>
 #include <stdint.h>
 #include <stdlib.h>
@@ -9,39 +10,50 @@
 
 #include <linux/input.h>
 #include <linux/joystick.h>
-
 #include <X11/Xlib.h>
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
+#include <alsa/asoundlib.h>
 
 #define internal        static
 #define local_persist   static
 #define global_variable static
 
-#define pixel(f, x, y) ((f)->buf[((y) * (f)->width) + (x)])
+#define pixel(f, x, y) ((f)->buf[((y) * (f)->WindowWidth) + (x)])
 #define MAX_CONTROLLERS 4
 
-struct Buffer {
-    const char *title;
-    int width;
-    int height;
-    uint32_t* buf;
+#ifndef FENSTER_SAMPLE_RATE
+#define FENSTER_SAMPLE_RATE 44100
+#endif
+
+#ifndef FENSTER_AUDIO_BUFSZ
+#define FENSTER_AUDIO_BUFSZ 8192
+#endif
+
+struct Buffer
+{
+    Window w; // X11 window
+    GC gc; // graphics context
+    Display* dpy; // XDisplay
+    XImage *img;
+    uint32_t* buf; // buffer to be filled to the XImage
+
+    int WindowWidth;
+    int WindowHeight;
     int keys[256]; /* keys are mostly ASCII, but arrows are 17..20 */
     int mod;       /* mod is 4 bits mask, ctrl=1, shift=2, alt=4, meta=8 */
     int x;
     int y;
     int mouse;
-    /* For animation */
-    int XOffset;
+
+    int XOffset; // test animation
     int YOffset;
-    /* Linux(X11) specifics */
-    Display* dpy;
-    Window w;
-    GC gc;
-    XImage *img;
+
+    const char *WindowTitle;
 };
 
-typedef struct {
+typedef struct
+{
     short left_stick_x; // -32767 to 32767
     short left_stick_y;
     short right_stick_x;
@@ -56,9 +68,12 @@ typedef struct {
 
 typedef struct
 {
-  snd_pcm_t* pcm;
-  float buf[FENSTER_AUDIO_BUFSZ];
-  size_t pos;
+    uint32_t RunningSampleIndex;
+    int SamplesPerSecond;
+    int ToneHz;
+    float ToneVolume;
+    snd_pcm_t* pcm;
+    float buf[FENSTER_AUDIO_BUFSZ];
 } AudioBuffer;
 
 global_variable int GLOBAL_JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
@@ -127,17 +142,22 @@ fenster_audio_close(AudioBuffer* audioBuffer)
 }
 
 internal void
-WriteAudio(AudioBuffer* audioBuffer, uint32_t* u)
+WriteAudio(AudioBuffer* audioBuffer)
 {
         int n = fenster_audio_available(audioBuffer);
         if (n > 0)
         {
             for (int i = 0; i < n; i++)
             {
-                u++;
+                // float t = (float)audioBuffer->RunningSampleIndex / (float)audioBuffer->SamplesPerSecond;
+                // float sineValue = sinf(2.0f * M_PI * audioBuffer->ToneHz * t);
+                // audioBuffer->buf[i] = sineValue * audioBuffer->ToneVolume;
+
                 /*audio[i] = (rand() & 0xff)/256.f;*/
-                int x = *u * 80 / 441;
+
+                int x = (float) audioBuffer->RunningSampleIndex * 80 / 441;
                 audioBuffer->buf[i] = ((((x >> 10) & 42) * x) & 0xff) / 256.f;
+                audioBuffer->RunningSampleIndex++;
             }
             fenster_audio_write(audioBuffer, audioBuffer->buf, n);
         }
@@ -149,9 +169,9 @@ MaDraw(Buffer* buffer)
     buffer->buf[100] = 0x00ff00;
     pixel(buffer, 64, 64) = 0xffff00;
 
-    for (int Y = 0; Y < buffer->height; ++Y)
+    for (int Y = 0; Y < buffer->WindowHeight; ++Y)
     {
-        for (int X = 0; X < buffer->width; ++X)
+        for (int X = 0; X < buffer->WindowWidth; ++X)
         {
             pixel(buffer, X, Y) = 0;
         }
@@ -161,9 +181,9 @@ MaDraw(Buffer* buffer)
 internal void
 RenderWeirdGradient_rw(Buffer* Window, int BlueOffset, int GreenOffset)
 {
-    for(int Y = 0; Y < Window->height; ++Y)
+    for(int Y = 0; Y < Window->WindowHeight; ++Y)
     {
-        for(int X = 0; X < Window->width; ++X)
+        for(int X = 0; X < Window->WindowWidth; ++X)
         {
             uint8_t Blue = (X);
             uint8_t Green = (Y);
@@ -182,14 +202,14 @@ internal void
 RenderWeirdGradient(Buffer* Window)
 {
     uint8_t BytesPerPixel = 4;
-    int Pitch = Window->width * BytesPerPixel; // size of the line (pitch)
+    int Pitch = Window->WindowWidth * BytesPerPixel; // size of the line (pitch)
     uint8_t* Memory = (uint8_t*)Window->buf;
 
     uint8_t* Row = Memory;  // points at first row
-    for(int Y = 0; Y < Window->height; ++Y)
+    for(int Y = 0; Y < Window->WindowHeight; ++Y)
     {
         uint32_t* Pixel = (uint32_t*)Row; // points to the first pixen on the row
-        for(int X = 0; X < Window->width; ++X)
+        for(int X = 0; X < Window->WindowWidth; ++X)
         {
             uint8_t Blue = (X + Window->XOffset);
             uint8_t Green = (Y + Window->YOffset);
@@ -228,7 +248,7 @@ OpenWindow(struct Buffer* buffer)
     buffer->dpy = XOpenDisplay(NULL);
     int screen = DefaultScreen(buffer->dpy);
     buffer->w = XCreateSimpleWindow(buffer->dpy, RootWindow(buffer->dpy, screen), 0, 0,
-                                 buffer->width, buffer->height, 0,
+                                 buffer->WindowWidth, buffer->WindowHeight, 0,
                                  BlackPixel(buffer->dpy, screen),
                                  WhitePixel(buffer->dpy, screen));
     buffer->gc = XCreateGC(buffer->dpy, buffer->w, 0, 0);
@@ -236,7 +256,7 @@ OpenWindow(struct Buffer* buffer)
                  ExposureMask | KeyPressMask | KeyReleaseMask |
                  ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
                  StructureNotifyMask);
-    XStoreName(buffer->dpy, buffer->w, buffer->title);
+    XStoreName(buffer->dpy, buffer->w, buffer->WindowTitle);
     XMapWindow(buffer->dpy, buffer->w);
 
     // Enable window closing
@@ -245,7 +265,7 @@ OpenWindow(struct Buffer* buffer)
 
     buffer->img = XCreateImage(buffer->dpy, DefaultVisual(buffer->dpy, 0), 24, ZPixmap,
                             0, (char *)buffer->buf,
-                            buffer->width, buffer->height,
+                            buffer->WindowWidth, buffer->WindowHeight,
                             32, 0);
     return 0;
 }
@@ -463,7 +483,7 @@ HandleLoop(struct Buffer* buffer)
     XEvent ev;
     // NOTE: This is where the buffer appears!
     XPutImage(buffer->dpy, buffer->w, buffer->gc, buffer->img, 0, 0, 0, 0,
-              buffer->width, buffer->height);
+              buffer->WindowWidth, buffer->WindowHeight);
 
     while (XPending(buffer->dpy))
     {
@@ -500,24 +520,24 @@ HandleLoop(struct Buffer* buffer)
             case ConfigureNotify:  // Window resizing
             {
                 XConfigureEvent xce = ev.xconfigure;
-                if (xce.width != buffer->width || xce.height != buffer->height)
+                if (xce.width != buffer->WindowWidth || xce.height != buffer->WindowHeight)
                 {
                     // Resize the buffer
-                    buffer->width = xce.width;
-                    buffer->height = xce.height;
+                    buffer->WindowWidth = xce.width;
+                    buffer->WindowHeight = xce.height;
 
                     // Free the old XImage structure (not the data)
                     buffer->img->data = NULL;  // Prevent XLib from freeing our buffer
                     XFree(buffer->img);
 
-                    buffer->buf = (uint32_t*)realloc(buffer->buf, buffer->width * buffer->height * sizeof(uint32_t));
+                    buffer->buf = (uint32_t*)realloc(buffer->buf, buffer->WindowWidth * buffer->WindowHeight * sizeof(uint32_t));
 
                     // Create completely new XImage
                     buffer->img = XCreateImage(buffer->dpy,
                                                DefaultVisual(buffer->dpy, 0),
                                                24, ZPixmap, 0,
                                                (char *)buffer->buf,
-                                               buffer->width, buffer->height,
+                                               buffer->WindowWidth, buffer->WindowHeight,
                                                32, 0);
                 }
             } break;
@@ -541,25 +561,29 @@ main(int argc, char *argv[])
     int W = 600, H = 480;
     uint32_t *buf = (uint32_t*)malloc(W * H * sizeof(uint32_t));
     struct Buffer buffer = {
-        .title = "hello",
-        .width = W,
-        .height = H,
         .buf = buf,
+        .WindowWidth = W,
+        .WindowHeight = H,
+        .WindowTitle = "hello",
     };
 
     OpenWindow(&buffer);
     JoyInit();
 
-    AudioBuffer audioBuffer = {0};
+    AudioBuffer audioBuffer = {
+        .RunningSampleIndex = 0,
+        .SamplesPerSecond = 48000,
+        .ToneHz = 256,
+        .ToneVolume = 0.3f
+    };
     fenster_audio_open(&audioBuffer);
-    uint32_t t = 0, u = 0;
 
     int64_t now = GetYerTime();
     while(HandleLoop(&buffer) == 0 && HandleInput(&buffer) == 0)
     {
         RenderWeirdGradient(&buffer);
         // RenderThings(&buffer, &t);
-        WriteAudio(&audioBuffer, &u);
+        WriteAudio(&audioBuffer);
 
         JoyHotplug();
         JoySetStates();
