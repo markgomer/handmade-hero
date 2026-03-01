@@ -39,7 +39,7 @@ GameOutputSound(game_sound_output_buffer* SoundBuffer, int ToneHz)
     int16 ToneVolume = 3000;
     int WavePeriod = SoundBuffer->SamplesPerSecond/ToneHz;
 
-    int16* SampleOut = SoundBuffer->Samples;
+    int16* SampleOut = (int16*)SoundBuffer->Samples;
 
     for(int SampleIndex = 0;
         SampleIndex < SoundBuffer->SampleCount;
@@ -50,7 +50,11 @@ GameOutputSound(game_sound_output_buffer* SoundBuffer, int ToneHz)
         *SampleOut++ = SampleValue;
         *SampleOut++ = SampleValue;
 
-        tSine += 2.0f*Pi32*1.0f/(float)WavePeriod;
+        tSine += 2.0f*M_PI*1.0f/(float)WavePeriod;
+        if (tSine > 2.0f*M_PI)
+        {
+            tSine -= 2.0f*M_PI;
+        }
     }
 }
 
@@ -62,7 +66,7 @@ GameUpdateAndRender(game_input* Input,
 {
     static int BlueOffset = 0;
     static int GreenOffset = 0;
-    static int ToneHz = 256;
+    int ToneHz = 256;
 
     game_controller_input* Input0 = &Input->Controllers[0];
     if(Input0->IsAnalog)
@@ -79,22 +83,22 @@ GameUpdateAndRender(game_input* Input,
     if(Input0->Down.EndedDown)
     {
         GreenOffset -= 4;
-        ToneHz = 256 - 128;
+        ToneHz = 256 - 32;
     }
     if(Input0->Up.EndedUp)
     {
         GreenOffset += 4;
-        ToneHz = 256 + 128;
+        ToneHz = 256 + 32;
     }
     if(Input0->Left.EndedLeft)
     {
         BlueOffset += 4;
-        ToneHz = 256 - 128;
+        ToneHz = 256 - 32;
     }
     if(Input0->Right.EndedRight)
     {
         BlueOffset -= 4;
-        ToneHz = 256 + 128;
+        ToneHz = 256 + 32;
     }
     GameOutputSound(SoundBuffer, ToneHz);
     RenderWeirdGradient(Buffer, BlueOffset, GreenOffset);

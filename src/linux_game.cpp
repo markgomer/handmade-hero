@@ -1,7 +1,6 @@
 #include <alsa/asoundlib.h>
 
 #include "game.cpp"
-#include "game.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -36,7 +35,8 @@ LinuxAudioOpen(snd_pcm_t** pcm)
         return -1;
     }
     unsigned short IsLittleEndian = 1;
-    int fmt = (*(char*)(&IsLittleEndian)) ? SND_PCM_FORMAT_S16_LE : SND_PCM_FORMAT_S16_BE;
+    int fmt = (*(char*)(&IsLittleEndian)) ?
+        SND_PCM_FORMAT_S16_LE : SND_PCM_FORMAT_S16_BE;
     return snd_pcm_set_params(*pcm, (snd_pcm_format_t)fmt, (snd_pcm_access_t)3,
                               AUDIO_CHANNELS, AUDIO_SAMPLE_RATE, 1, 100000);
 }
@@ -410,7 +410,7 @@ main(int argc, char *argv[])
     game_kb_mouse_input KbMouse = {};
     JoyInit(JoyFDs, JoyStates);
 
-    int16 Samples[(AUDIO_SAMPLE_RATE/FRAMES_PER_SECOND) * 2];
+    int16 Samples[(AUDIO_SAMPLE_RATE/FRAMES_PER_SECOND) * 2] = {};
     snd_pcm_t* pcm = NULL;
     LinuxAudioOpen(&pcm);
 
@@ -427,13 +427,15 @@ main(int argc, char *argv[])
     int IsRunning = 1;
     while(IsRunning)
     {
-        if(!LinuxWindowLoop(&Offscreen_buffer, &linwin, &KbMouse)) IsRunning = 0;
-        if(!LinuxProcessJoyDigitalButton(&Offscreen_buffer, &KbMouse)) IsRunning = 0;
+        if(!LinuxWindowLoop(&Offscreen_buffer, &linwin, &KbMouse))
+            IsRunning = 0;
+        if(!LinuxProcessJoyDigitalButton(&Offscreen_buffer, &KbMouse))
+            IsRunning = 0;
 
         JoyHotplug(JoyFDs, JoyStates);
         LinuxJoySetStates(JoyFDs, JoyStates);
         game_controller_input* Controller0 = &Input.Controllers[0];
-        Controller0->IsAnalog = true;
+        Controller0->IsAnalog = false;
 
         // joypad testing
         Controller0->Down.EndedDown = JoyStates[0].dpad_y < 0;
