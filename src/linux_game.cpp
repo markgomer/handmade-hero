@@ -391,6 +391,32 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
     return IsRunning;
 }
 
+static void
+LinuxProcessDigitalButton(game_button_state* OldState,
+                          game_button_state* NewState,
+                          uint8_t LinuxJoyButtonState,
+                          uint8_t ButtonBit)
+{
+    bool IsDown = ((LinuxJoyButtonState & ButtonBit) != 0);
+    NewState->EndedUp = IsDown;
+    NewState->EndedDown = IsDown;
+    NewState->EndedLeft = IsDown;
+    NewState->EndedRight = IsDown;
+
+    NewState->HalfTransitionCount =
+        (OldState->EndedUp != NewState->EndedUp) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedDown != NewState->EndedDown) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedLeft != NewState->EndedLeft) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedRight != NewState->EndedRight) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedRightShoulder != NewState->EndedRightShoulder) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedLeftShoulder != NewState->EndedLeftShoulder) ? 1 : 0;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -406,8 +432,10 @@ main(int argc, char *argv[])
     };
 
     int JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
-    game_input Input = {};
     LinuxControllerInputState LinuxJoyStates[MAX_CONTROLLERS] = {};
+    game_input Input[2] = {};
+    game_input *NewInput = &Input[0];
+    game_input *OldInput = &Input[1];
     game_kb_mouse_input KbMouse = {};
     LinuxJoyInit(JoyFDs, LinuxJoyStates);
 
@@ -433,24 +461,55 @@ main(int argc, char *argv[])
         if(!LinuxGetKBMouseState(&Offscreen_buffer, &KbMouse))
             IsRunning = 0;
 
-        game_controller_input* Controller0 = &Input.Controllers[0];
-        Controller0->IsAnalog = false;
         JoyHotplug(JoyFDs, LinuxJoyStates);
         LinuxProcessJoypadButtons(JoyFDs, LinuxJoyStates);
 
-        // joypad testing
-        Controller0->Down.EndedDown = JoyStates[0].dpad_y < 0;
-        Controller0->Up.EndedUp = JoyStates[0].dpad_y > 0;
-        Controller0->Left.EndedLeft = JoyStates[0].dpad_x < 0;
-        Controller0->Right.EndedRight = JoyStates[0].dpad_x > 0;
+        for (int ControllerIndex = 0;
+                ControllerIndex < MAX_CONTROLLERS;
+                ++ControllerIndex)
+        {
+            game_controller_input *OldController = &OldInput->Controllers[ControllerIndex];
+            game_controller_input *NewController = &NewInput->Controllers[ControllerIndex];
+            NewController->IsAnalog = false;
 
+            LinuxProcessDigitalButton(
+                &OldController->Down,
+                &NewController->Down,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x01 // NOTE: ButtonBit = A
+            );
+            LinuxProcessDigitalButton(
+                &OldController->Right,
+                &NewController->Right,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x02 // NOTE: ButtonBit = B
+            );
+            LinuxProcessDigitalButton(
+                &OldController->Left,
+                &NewController->Left,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x04 // NOTE: ButtonBit = X
+            );
+            LinuxProcessDigitalButton(
+                &OldController->Up,
+                &NewController->Up,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x08 // NOTE: ButtonBit = Y
+            );
+        }
+
+        // NOTE: I'm saving this to lookup the keycodes
+        // OldController->Down.EndedDown = LinuxJoyStates[0].dpad_y < 0;
+        // Controller0->Up.EndedUp = LinuxJoyStates[0].dpad_y > 0;
+        // Controller0->Left.EndedLeft = LinuxJoyStates[0].dpad_x < 0;
+        // Controller0->Right.EndedRight = LinuxJoyStates[0].dpad_x > 0;
         // keyboard testing
-        Controller0->Down.EndedDown = KbMouse.keys[18];
-        Controller0->Up.EndedUp = KbMouse.keys[17];
-        Controller0->Left.EndedLeft = KbMouse.keys[20]; 
-        Controller0->Right.EndedRight = KbMouse.keys[19];
+        // Controller0->Down.EndedDown = KbMouse.keys[18];
+        // Controller0->Up.EndedUp = KbMouse.keys[17];
+        // Controller0->Left.EndedLeft = KbMouse.keys[20]; 
+        // Controller0->Right.EndedRight = KbMouse.keys[19];
 
-        GameUpdateAndRender(&Input, &Offscreen_buffer, &GameSound);
+        GameUpdateAndRender(Input, &Offscreen_buffer, &GameSound);
         LinuxAudioWrite(pcm, GameSound.Samples, GameSound.SampleCount);
 
         int64_t time = GetYerTime();
@@ -459,6 +518,10 @@ main(int argc, char *argv[])
             Sleeper(time - now);
         }
         now = time;
+
+        game_input *Temp = NewInput;
+        NewInput = OldInput;
+        OldInput = Temp;
     }
 
     LinuxAudioClose(pcm);

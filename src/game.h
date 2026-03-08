@@ -33,6 +33,8 @@ struct game_button_state
     bool EndedDown;
     bool EndedLeft;
     bool EndedRight;
+    bool EndedRightShoulder;
+    bool EndedLeftShoulder;
 };
 
 struct game_controller_input

@@ -68,7 +68,9 @@ GameUpdateAndRender(game_input* Input,
     static int GreenOffset = 0;
     int ToneHz = 256;
 
-    game_controller_input* Input0 = &Input->Controllers[0];
+    /* FIXME: the keyd process is taking position 0...
+     * should tight those device discoveries... */
+    game_controller_input* Input0 = &Input->Controllers[1]; 
     if(Input0->IsAnalog)
     {
         // NOTE: Use analog movement tuning
