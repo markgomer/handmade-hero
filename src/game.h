@@ -8,6 +8,8 @@
 #define AUDIO_BUF_SIZE 8192
 #endif
 
+#define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+
 struct game_offscreen_buffer
 {
     // NOTE: (casey) Pixels are always 32-bit wide, Memory order BB GG RR XX
