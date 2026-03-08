@@ -509,7 +509,7 @@ main(int argc, char *argv[])
         // Controller0->Left.EndedLeft = KbMouse.keys[20]; 
         // Controller0->Right.EndedRight = KbMouse.keys[19];
 
-        GameUpdateAndRender(Input, &Offscreen_buffer, &GameSound);
+        GameUpdateAndRender(NewInput, &Offscreen_buffer, &GameSound);
         LinuxAudioWrite(pcm, GameSound.Samples, GameSound.SampleCount);
 
         int64_t time = GetYerTime();
