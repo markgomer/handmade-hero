@@ -23,7 +23,7 @@ typedef struct
     short left_stick_y;
     short right_stick_x;
     short right_stick_y;
-    unsigned short buttons; // bitmask A=0x0001, B=0x0002, etc. 0000_0000_0000_YXBA
+    unsigned short buttons; /* bitmask: 0000_0000_0000_YXBA */
     unsigned char left_trigger; // 0-255
     unsigned char right_trigger;
     char dpad_x; // -1,0,1
