@@ -17,18 +17,20 @@
         in
         {
             default = pkgs.mkShell {
-                packages = [
-                    pkgs.gcc # compiler
-                    pkgs.clang-tools # neovim LSP
-                ];
+                packages = [ ];
 
+                # dependencies needed at runtime
                 buildInputs = [
                     pkgs.libx11
                     pkgs.alsa-lib
                     pkgs.SDL2
                 ];
+                # tools needed only during the build process
+                nativeBuildInputs = [
+                    pkgs.gcc
+                    pkgs.clang-tools # for neovim's LSP
+                ];
             };
-        }
-        );
+        });
     };
 }

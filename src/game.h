@@ -23,10 +23,7 @@ struct game_sound_output_buffer
 {
     int SamplesPerSecond;
     int SampleCount;
-    //(marco) TODO: this is the actual buffer! Convert other functions so we deal with
-    // intergers instead of float.
     int16* Samples;
-    // float buffer[AUDIO_BUF_SIZE];
 };
 
 struct game_button_state
@@ -36,6 +33,8 @@ struct game_button_state
     bool EndedDown;
     bool EndedLeft;
     bool EndedRight;
+    bool EndedRightShoulder;
+    bool EndedLeftShoulder;
 };
 
 struct game_controller_input

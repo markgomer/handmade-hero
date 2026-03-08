@@ -74,28 +74,28 @@ LinuxAudioClose(snd_pcm_t* pcm)
 
 
 static int
-LinuxOpenWindow(struct game_offscreen_buffer* Offscreen_buffer, struct linux_window* linwin)
+LinuxOpenX11Window(struct game_offscreen_buffer* Offscreen_buffer, struct linux_window* LinuxWindow)
 {
-    linwin->dpy = XOpenDisplay(NULL);
-    int screen = DefaultScreen(linwin->dpy);
-    linwin->w = XCreateSimpleWindow(linwin->dpy,
-                                    RootWindow(linwin->dpy, screen), 0, 0,
+    LinuxWindow->dpy = XOpenDisplay(NULL);
+    int screen = DefaultScreen(LinuxWindow->dpy);
+    LinuxWindow->w = XCreateSimpleWindow(LinuxWindow->dpy,
+                                    RootWindow(LinuxWindow->dpy, screen), 0, 0,
                                     Offscreen_buffer->Width, Offscreen_buffer->Height, 0,
-                                    BlackPixel(linwin->dpy, screen),
-                                    WhitePixel(linwin->dpy, screen));
-    linwin->gc = XCreateGC(linwin->dpy, linwin->w, 0, 0);
-    XSelectInput(linwin->dpy, linwin->w,
+                                    BlackPixel(LinuxWindow->dpy, screen),
+                                    WhitePixel(LinuxWindow->dpy, screen));
+    LinuxWindow->gc = XCreateGC(LinuxWindow->dpy, LinuxWindow->w, 0, 0);
+    XSelectInput(LinuxWindow->dpy, LinuxWindow->w,
                  ExposureMask | KeyPressMask | KeyReleaseMask |
                  ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
                  StructureNotifyMask);
-    XStoreName(linwin->dpy, linwin->w, linwin->WindowTitle);
-    XMapWindow(linwin->dpy, linwin->w);
+    XStoreName(LinuxWindow->dpy, LinuxWindow->w, LinuxWindow->WindowTitle);
+    XMapWindow(LinuxWindow->dpy, LinuxWindow->w);
 
     // Enable window closing
-    Atom wmDelete = XInternAtom(linwin->dpy, "WM_DELETE_WINDOW", False);
-    XSetWMProtocols(linwin->dpy, linwin->w, &wmDelete, 1);
+    Atom wmDelete = XInternAtom(LinuxWindow->dpy, "WM_DELETE_WINDOW", False);
+    XSetWMProtocols(LinuxWindow->dpy, LinuxWindow->w, &wmDelete, 1);
 
-    linwin->img = XCreateImage(linwin->dpy, DefaultVisual(linwin->dpy, 0), 24,
+    LinuxWindow->img = XCreateImage(LinuxWindow->dpy, DefaultVisual(LinuxWindow->dpy, 0), 24,
                                ZPixmap, 0, (char *)Offscreen_buffer->Memory, Offscreen_buffer->Width,
                                Offscreen_buffer->Height, 32, 0);
     return 0;
@@ -144,7 +144,7 @@ LinuxJoyOpen(int index)
 }
 
 static void
-JoyClose(int JoyFDs[], LinuxControllerInputState JoyStates[])
+LinuxJoyClose(int JoyFDs[], LinuxControllerInputState LinuxJoyStates[])
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
     {
@@ -157,17 +157,18 @@ JoyClose(int JoyFDs[], LinuxControllerInputState JoyStates[])
 
 // Call this once at startup
 static void
-JoyInit(int JoyFDs[MAX_CONTROLLERS], LinuxControllerInputState JoyStates[MAX_CONTROLLERS])
+LinuxJoyInit(int JoyFDs[MAX_CONTROLLERS], LinuxControllerInputState LinuxJoyStates[MAX_CONTROLLERS])
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
     {
         JoyFDs[i] = LinuxJoyOpen(i);
-        JoyStates[i].connected = (JoyFDs[i] >= 0);
+        LinuxJoyStates[i].connected = (JoyFDs[i] >= 0);
     }
 }
 
 static void
-LinuxJoySetStates(int JoyFDs[], LinuxControllerInputState JoyStates[])
+LinuxProcessJoypadButtons(int JoyFDs[],
+                          LinuxControllerInputState LinuxJoyStates[])
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
     {
@@ -177,7 +178,7 @@ LinuxJoySetStates(int JoyFDs[], LinuxControllerInputState JoyStates[])
         }
 
         struct js_event ev;
-        LinuxControllerInputState* state = &JoyStates[i];
+        LinuxControllerInputState* state = &LinuxJoyStates[i];
 
         // Reset per-frame changes if needed (we'll rebuild)
         // But we just accumulate latest values
@@ -237,7 +238,7 @@ LinuxJoySetStates(int JoyFDs[], LinuxControllerInputState JoyStates[])
 }
 
 static void
-JoyHotplug(int JoyFDs[], LinuxControllerInputState JoyStates[])
+JoyHotplug(int JoyFDs[], LinuxControllerInputState LinuxJoyStates[])
 {
     for (int i = 0; i < MAX_CONTROLLERS; i++)
     {
@@ -246,14 +247,14 @@ JoyHotplug(int JoyFDs[], LinuxControllerInputState JoyStates[])
             JoyFDs[i] = LinuxJoyOpen(i);
             if (JoyFDs[i] >= 0)
             {
-                JoyStates[i].connected = 1;
+                LinuxJoyStates[i].connected = 1;
             }
         }
     }
 }
 
 static int
-LinuxProcessJoyDigitalButton(game_offscreen_buffer* b, game_kb_mouse_input* kb_mouse)
+LinuxGetKBMouseState(game_offscreen_buffer* b, game_kb_mouse_input* kb_mouse)
 {
     int IsRunning = 1;
     int has_keys = 0;
@@ -312,17 +313,17 @@ LinuxProcessJoyDigitalButton(game_offscreen_buffer* b, game_kb_mouse_input* kb_m
 
 static int
 LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
-                struct linux_window* linwin, game_kb_mouse_input* kb_mouse)
+                struct linux_window* LinuxWindow, game_kb_mouse_input* kb_mouse)
 {
     uint8_t IsRunning = 1;
     XEvent ev;
     // NOTE: This is where the Offscreen_buffer appears!
-    XPutImage(linwin->dpy, linwin->w, linwin->gc, linwin->img, 0, 0, 0, 0,
+    XPutImage(LinuxWindow->dpy, LinuxWindow->w, LinuxWindow->gc, LinuxWindow->img, 0, 0, 0, 0,
               Offscreen_buffer->Width, Offscreen_buffer->Height);
 
-    while (XPending(linwin->dpy))
+    while (XPending(LinuxWindow->dpy))
     {
-        XNextEvent(linwin->dpy, &ev);
+        XNextEvent(LinuxWindow->dpy, &ev);
         switch (ev.type)
         {
             case ButtonPress:
@@ -340,7 +341,7 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
             case KeyRelease:
             {
                 int m = ev.xkey.state;
-                int k = XkbKeycodeToKeysym(linwin->dpy, ev.xkey.keycode, 0, 0);
+                int k = XkbKeycodeToKeysym(LinuxWindow->dpy, ev.xkey.keycode, 0, 0);
                 for (uint32_t i = 0; i < 124; i += 2)
                 {
                     if (FENSTER_KEYCODES[i] == k)
@@ -362,14 +363,14 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
                     Offscreen_buffer->Height = xce.height;
 
                     // Free the old XImage structure (not the data)
-                    linwin->img->data = NULL;  // Prevent XLib from freeing our Offscreen_buffer
-                    XFree(linwin->img);
+                    LinuxWindow->img->data = NULL;  // Prevent XLib from freeing our Offscreen_buffer
+                    XFree(LinuxWindow->img);
 
                     Offscreen_buffer->Memory = (uint32_t*)realloc(Offscreen_buffer->Memory, Offscreen_buffer->Width * Offscreen_buffer->Height * sizeof(uint32_t));
 
                     // Create completely new XImage
-                    linwin->img = XCreateImage(linwin->dpy,
-                                               DefaultVisual(linwin->dpy, 0),
+                    LinuxWindow->img = XCreateImage(LinuxWindow->dpy,
+                                               DefaultVisual(LinuxWindow->dpy, 0),
                                                24, ZPixmap, 0,
                                                (char *)Offscreen_buffer->Memory,
                                                Offscreen_buffer->Width, Offscreen_buffer->Height,
@@ -380,7 +381,7 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
             {
                 // Window close button
                 if (ev.xclient.data.l[0] ==
-                        (long)XInternAtom(linwin->dpy, "WM_DELETE_WINDOW", False))
+                        (long)XInternAtom(LinuxWindow->dpy, "WM_DELETE_WINDOW", False))
                 {
                     IsRunning = 0;
                 }
@@ -388,6 +389,32 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
         }
     }
     return IsRunning;
+}
+
+static void
+LinuxProcessDigitalButton(game_button_state* OldState,
+                          game_button_state* NewState,
+                          uint8_t LinuxJoyButtonState,
+                          uint8_t ButtonBit)
+{
+    bool IsDown = ((LinuxJoyButtonState & ButtonBit) != 0);
+    NewState->EndedUp = IsDown;
+    NewState->EndedDown = IsDown;
+    NewState->EndedLeft = IsDown;
+    NewState->EndedRight = IsDown;
+
+    NewState->HalfTransitionCount =
+        (OldState->EndedUp != NewState->EndedUp) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedDown != NewState->EndedDown) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedLeft != NewState->EndedLeft) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedRight != NewState->EndedRight) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedRightShoulder != NewState->EndedRightShoulder) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedLeftShoulder != NewState->EndedLeftShoulder) ? 1 : 0;
 }
 
 int
@@ -400,15 +427,17 @@ main(int argc, char *argv[])
         .Width = W,
         .Height = H,
     };
-    struct linux_window linwin = {
+    struct linux_window LinuxWindow = {
         .WindowTitle = "Handmade Hero",
     };
 
     int JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
-    LinuxControllerInputState JoyStates[MAX_CONTROLLERS] = {};
-    game_input Input = {};
+    LinuxControllerInputState LinuxJoyStates[MAX_CONTROLLERS] = {};
+    game_input Input[2] = {};
+    game_input *NewInput = &Input[0];
+    game_input *OldInput = &Input[1];
     game_kb_mouse_input KbMouse = {};
-    JoyInit(JoyFDs, JoyStates);
+    LinuxJoyInit(JoyFDs, LinuxJoyStates);
 
     int16 Samples[(AUDIO_SAMPLE_RATE/FRAMES_PER_SECOND) * 2] = {};
     snd_pcm_t* pcm = NULL;
@@ -419,7 +448,7 @@ main(int argc, char *argv[])
     GameSound.SampleCount = GameSound.SamplesPerSecond / FRAMES_PER_SECOND;
     GameSound.Samples = Samples;
 
-    LinuxOpenWindow(&Offscreen_buffer, &linwin);
+    LinuxOpenX11Window(&Offscreen_buffer, &LinuxWindow);
 
     int64_t now = GetYerTime();
     int64_t start = now;
@@ -427,29 +456,60 @@ main(int argc, char *argv[])
     int IsRunning = 1;
     while(IsRunning)
     {
-        if(!LinuxWindowLoop(&Offscreen_buffer, &linwin, &KbMouse))
+        if(!LinuxWindowLoop(&Offscreen_buffer, &LinuxWindow, &KbMouse))
             IsRunning = 0;
-        if(!LinuxProcessJoyDigitalButton(&Offscreen_buffer, &KbMouse))
+        if(!LinuxGetKBMouseState(&Offscreen_buffer, &KbMouse))
             IsRunning = 0;
 
-        JoyHotplug(JoyFDs, JoyStates);
-        LinuxJoySetStates(JoyFDs, JoyStates);
-        game_controller_input* Controller0 = &Input.Controllers[0];
-        Controller0->IsAnalog = false;
+        JoyHotplug(JoyFDs, LinuxJoyStates);
+        LinuxProcessJoypadButtons(JoyFDs, LinuxJoyStates);
 
-        // joypad testing
-        Controller0->Down.EndedDown = JoyStates[0].dpad_y < 0;
-        Controller0->Up.EndedUp = JoyStates[0].dpad_y > 0;
-        Controller0->Left.EndedLeft = JoyStates[0].dpad_x < 0;
-        Controller0->Right.EndedRight = JoyStates[0].dpad_x > 0;
+        for (int ControllerIndex = 0;
+                ControllerIndex < MAX_CONTROLLERS;
+                ++ControllerIndex)
+        {
+            game_controller_input *OldController = &OldInput->Controllers[ControllerIndex];
+            game_controller_input *NewController = &NewInput->Controllers[ControllerIndex];
+            NewController->IsAnalog = false;
 
+            LinuxProcessDigitalButton(
+                &OldController->Down,
+                &NewController->Down,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x01 // NOTE: ButtonBit = A
+            );
+            LinuxProcessDigitalButton(
+                &OldController->Right,
+                &NewController->Right,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x02 // NOTE: ButtonBit = B
+            );
+            LinuxProcessDigitalButton(
+                &OldController->Left,
+                &NewController->Left,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x04 // NOTE: ButtonBit = X
+            );
+            LinuxProcessDigitalButton(
+                &OldController->Up,
+                &NewController->Up,
+                LinuxJoyStates[ControllerIndex].buttons,
+                0x08 // NOTE: ButtonBit = Y
+            );
+        }
+
+        // NOTE: I'm saving this to lookup the keycodes
+        // OldController->Down.EndedDown = LinuxJoyStates[0].dpad_y < 0;
+        // Controller0->Up.EndedUp = LinuxJoyStates[0].dpad_y > 0;
+        // Controller0->Left.EndedLeft = LinuxJoyStates[0].dpad_x < 0;
+        // Controller0->Right.EndedRight = LinuxJoyStates[0].dpad_x > 0;
         // keyboard testing
-        Controller0->Down.EndedDown = KbMouse.keys[18];
-        Controller0->Up.EndedUp = KbMouse.keys[17];
-        Controller0->Left.EndedLeft = KbMouse.keys[20]; 
-        Controller0->Right.EndedRight = KbMouse.keys[19];
+        // Controller0->Down.EndedDown = KbMouse.keys[18];
+        // Controller0->Up.EndedUp = KbMouse.keys[17];
+        // Controller0->Left.EndedLeft = KbMouse.keys[20]; 
+        // Controller0->Right.EndedRight = KbMouse.keys[19];
 
-        GameUpdateAndRender(&Input, &Offscreen_buffer, &GameSound);
+        GameUpdateAndRender(Input, &Offscreen_buffer, &GameSound);
         LinuxAudioWrite(pcm, GameSound.Samples, GameSound.SampleCount);
 
         int64_t time = GetYerTime();
@@ -458,10 +518,15 @@ main(int argc, char *argv[])
             Sleeper(time - now);
         }
         now = time;
+
+        game_input *Temp = NewInput;
+        NewInput = OldInput;
+        OldInput = Temp;
     }
+
     LinuxAudioClose(pcm);
-    JoyClose(JoyFDs, JoyStates);
-    XCloseDisplay(linwin.dpy);
+    LinuxJoyClose(JoyFDs, LinuxJoyStates);
+    XCloseDisplay(LinuxWindow.dpy);
 
     return 0;
 }
