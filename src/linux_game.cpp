@@ -209,7 +209,8 @@ LinuxProcessJoypadButtons(int JoyFDs[],
                     } break;
                     case 2:
                     {
-                        state->left_trigger  = (ev.value + 32767) / 257; // -32767..32767 → 0..255
+                        // -32767..32767 → 0..255
+                        state->left_trigger = (ev.value + 32767) / 257; 
                     } break;
                     case 3:
                     {
@@ -366,6 +367,7 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
                     LinuxWindow->img->data = NULL;  // Prevent XLib from freeing our Offscreen_buffer
                     XFree(LinuxWindow->img);
 
+                    // WARN: Maybe we should allocate in another way here
                     Offscreen_buffer->Memory = (uint32_t*)realloc(Offscreen_buffer->Memory, Offscreen_buffer->Width * Offscreen_buffer->Height * sizeof(uint32_t));
 
                     // Create completely new XImage
@@ -465,12 +467,21 @@ main(int argc, char *argv[])
         LinuxProcessJoypadButtons(JoyFDs, LinuxJoyStates);
 
         for (int ControllerIndex = 0;
-                ControllerIndex < MAX_CONTROLLERS;
-                ++ControllerIndex)
+            ControllerIndex < MAX_CONTROLLERS;
+            ++ControllerIndex)
         {
             game_controller_input *OldController = &OldInput->Controllers[ControllerIndex];
             game_controller_input *NewController = &NewInput->Controllers[ControllerIndex];
-            NewController->IsAnalog = false;
+            
+            NewController->IsAnalog = true;
+            // NOTE: Normalize the sticks!
+            float X = LinuxJoyStates[ControllerIndex].left_stick_x / 32767.0f;
+            float Y = LinuxJoyStates[ControllerIndex].left_stick_y / 32767.0f;
+            NewController->StartX = OldController->EndX;
+            NewController->StartY = OldController->EndY;
+            // TODO: Min Max macros!
+            NewController->MinX = OldController->MaxX = NewController->EndX = X;
+            NewController->MinY = OldController->MaxY = NewController->EndY = Y;
 
             LinuxProcessDigitalButton(
                 &OldController->Down,
@@ -509,7 +520,7 @@ main(int argc, char *argv[])
         // Controller0->Left.EndedLeft = KbMouse.keys[20]; 
         // Controller0->Right.EndedRight = KbMouse.keys[19];
 
-        GameUpdateAndRender(Input, &Offscreen_buffer, &GameSound);
+        GameUpdateAndRender(NewInput, &Offscreen_buffer, &GameSound);
         LinuxAudioWrite(pcm, GameSound.Samples, GameSound.SampleCount);
 
         int64_t time = GetYerTime();
