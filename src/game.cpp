@@ -74,8 +74,8 @@ GameUpdateAndRender(game_input* Input,
     if(Input0->IsAnalog)
     {
         // NOTE: Use analog movement tuning
-        // ToneHz = 256 + (int)(128.0f*Input0->EndX);
-        // BlueOffset += (int)4.0f*(Input0->EndY);
+        ToneHz = 256 + (int)(128.0f*Input0->EndX);
+        BlueOffset += (int)4.0f*(Input0->EndY);
     }
     else
     {
