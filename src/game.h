@@ -4,15 +4,17 @@
 
 #define int16 int16_t
 
-#ifndef AUDIO_BUF_SIZE
-#define AUDIO_BUF_SIZE 8192
-#endif
+#define Assert(Expression) if(!(Expression)) {*(int*)0 = 0;}
 
 #define Kilobytes(Value) ((Value)*1024)
 #define Megabytes(Value) (Kilobytes(Value)*1024)
 #define Gigabytes(Value) (Megabytes(Value)*1024)
 
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
+
+#ifndef AUDIO_BUF_SIZE
+#define AUDIO_BUF_SIZE 8192
+#endif
 
 struct game_offscreen_buffer
 {
