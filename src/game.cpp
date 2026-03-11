@@ -60,13 +60,19 @@ GameOutputSound(game_sound_output_buffer* SoundBuffer, int ToneHz)
 
 
 static void
-GameUpdateAndRender(game_input* Input,
+GameUpdateAndRender(game_memory* Memory,
+                    game_input* Input,
                     game_offscreen_buffer* Buffer,
                     game_sound_output_buffer* SoundBuffer)
 {
-    static int BlueOffset = 0;
-    static int GreenOffset = 0;
-    int ToneHz = 256;
+    game_state* GameState = (game_state*)Memory->PermanentStorage;
+    if(!Memory->IsInitialized)
+    {
+        GameState->ToneHz = 256;
+
+        // TODO: This may be more appropriate to do in the platform layer
+        Memory->IsInitialized = true;
+    }
 
     /* FIXME: the keyd process is taking position 0...
      * should tight those device discoveries... */
@@ -74,8 +80,8 @@ GameUpdateAndRender(game_input* Input,
     if(Input0->IsAnalog)
     {
         // NOTE: Use analog movement tuning
-        ToneHz = 256 + (int)(128.0f*Input0->EndX);
-        BlueOffset += (int)4.0f*(Input0->EndY);
+        GameState->ToneHz = 256 + (int)(128.0f*Input0->EndX);
+        GameState->BlueOffset += (int)4.0f*(Input0->EndY);
     }
     else
     {
@@ -84,24 +90,24 @@ GameUpdateAndRender(game_input* Input,
 
     if(Input0->Down.EndedDown)
     {
-        GreenOffset -= 4;
-        ToneHz = 256 - 32;
+        GameState->GreenOffset -= 4;
+        GameState->ToneHz = 256 - 32;
     }
     if(Input0->Up.EndedUp)
     {
-        GreenOffset += 4;
-        ToneHz = 256 + 32;
+        GameState->GreenOffset += 4;
+        GameState->ToneHz = 256 + 32;
     }
     if(Input0->Left.EndedLeft)
     {
-        BlueOffset += 4;
-        ToneHz = 256 - 32;
+        GameState->BlueOffset += 4;
+        GameState->ToneHz = 256 - 32;
     }
     if(Input0->Right.EndedRight)
     {
-        BlueOffset -= 4;
-        ToneHz = 256 + 32;
+        GameState->BlueOffset -= 4;
+        GameState->ToneHz = 256 + 32;
     }
-    GameOutputSound(SoundBuffer, ToneHz);
-    RenderWeirdGradient(Buffer, BlueOffset, GreenOffset);
+    GameOutputSound(SoundBuffer, GameState->ToneHz);
+    RenderWeirdGradient(Buffer, GameState->BlueOffset, GameState->GreenOffset);
 }
