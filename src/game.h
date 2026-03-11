@@ -79,10 +79,33 @@ struct game_input
     game_controller_input Controllers[4];
 };
 
+struct game_memory
+{
+    bool IsInitialized;
+    uint64_t PermanentStorageSize;
+    void* PermanentStorage; // NOTE: REQUIRED to be cleared to zero at startup
+
+    uint64_t TransientStorageSize;
+    void* TransientStorage; // NOTE: REQUIRED to be cleared to zero at startup
+};
+
 static void
-GameUpdateAndRender(game_input* Input,
+GameUpdateAndRender(game_memory* Memory, game_input* Input,
                     game_offscreen_buffer* Buffer,
                     game_sound_output_buffer* SoundBuffer);
+
+//
+//
+//
+struct game_state
+{
+    int ToneHz;
+    int BlueOffset;
+    int GreenOffset;
+};
+//
+//
+//
 
 #define HANDMADE_H
 #endif

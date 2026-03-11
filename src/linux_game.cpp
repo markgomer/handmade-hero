@@ -1,5 +1,3 @@
-#include <alsa/asoundlib.h>
-
 #include "game.cpp"
 
 #include <stdlib.h>
@@ -7,7 +5,6 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <string.h>
 
 #include "linux_game.h"
 
@@ -450,6 +447,21 @@ main(int argc, char *argv[])
     GameSound.SampleCount = GameSound.SamplesPerSecond / FRAMES_PER_SECOND;
     GameSound.Samples = Samples;
 
+    game_memory GameMemory = {};
+    GameMemory.PermanentStorageSize = Megabytes((uint64_t)64);
+    GameMemory.PermanentStorage = malloc(GameMemory.PermanentStorageSize);
+
+    GameMemory.TransientStorageSize = Gigabytes((uint64_t)2);
+    GameMemory.TransientStorage = malloc(GameMemory.TransientStorageSize);
+
+    // TODO: casey wrapped this around all the rest of the code.
+    if(!GameSound.Samples || !GameMemory.PermanentStorage ||
+       !GameMemory.TransientStorage)
+    {
+        // TODO: do some logging
+        return 1;
+    }
+
     LinuxOpenX11Window(&Offscreen_buffer, &LinuxWindow);
 
     int64_t now = GetYerTime();
@@ -520,7 +532,7 @@ main(int argc, char *argv[])
         // Controller0->Left.EndedLeft = KbMouse.keys[20]; 
         // Controller0->Right.EndedRight = KbMouse.keys[19];
 
-        GameUpdateAndRender(NewInput, &Offscreen_buffer, &GameSound);
+        GameUpdateAndRender(&GameMemory, NewInput, &Offscreen_buffer, &GameSound);
         LinuxAudioWrite(pcm, GameSound.Samples, GameSound.SampleCount);
 
         int64_t time = GetYerTime();
