@@ -1,10 +1,24 @@
-#ifndef HANDMADE_H
+#if !defined(HANDMADE_H)
+
+/*
+ * HANDMADE_INTERNAL
+ * 0 = Build for public release
+ * 1 = Build for developer only
+ *
+ * HANDMADE_SLOW
+ * 0 = No slow code allowed!
+ * 1 = Slow code welcome
+ * */
 
 #include <stdint.h>
 
 #define int16 int16_t
 
+#if HANDMADE_SLOW
 #define Assert(Expression) if(!(Expression)) {*(int*)0 = 0;}
+#else
+#define Assert(Expression)
+#endif
 
 #define Kilobytes(Value) ((Value)*1024)
 #define Megabytes(Value) (Kilobytes(Value)*1024)

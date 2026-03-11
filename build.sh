@@ -10,6 +10,7 @@ pushd build/
 # prefix-map is for debugging inside the container:
 # -fdebug-prefix-map=/var/home=/run/host/var/home \
 g++ -g -Wall -O0 \
+-DHANDMADE_SLOW=1 -DHANDMADE_LINUX=1 -DHANDMADE_INTERNAL \
 ../src/linux_game.cpp -o game \
 -lX11 -lasound
 
