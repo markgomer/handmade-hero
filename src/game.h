@@ -92,6 +92,7 @@ struct game_controller_input
 
 struct game_input 
 {
+    // TODO: insert clock value here
     game_controller_input Controllers[4];
 };
 

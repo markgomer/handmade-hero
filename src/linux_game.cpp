@@ -449,10 +449,13 @@ main(int argc, char *argv[])
 
     game_memory GameMemory = {};
     GameMemory.PermanentStorageSize = Megabytes((uint64_t)64);
-    GameMemory.PermanentStorage = malloc(GameMemory.PermanentStorageSize);
-
     GameMemory.TransientStorageSize = Gigabytes((uint64_t)2);
-    GameMemory.TransientStorage = malloc(GameMemory.TransientStorageSize);
+    uint64_t TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+
+    GameMemory.PermanentStorage = malloc(TotalSize);
+    // NOTE: uint8_t* because it's a byte pointer
+    GameMemory.TransientStorage = ((uint8_t*)GameMemory.PermanentStorage +
+                                  GameMemory.PermanentStorageSize);
 
     // TODO: casey wrapped this around all the rest of the code.
     if(!GameSound.Samples || !GameMemory.PermanentStorage ||
