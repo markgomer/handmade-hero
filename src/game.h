@@ -18,13 +18,13 @@
 
 #include <stdint.h>
 
-#define u8  uint8_t
-#define u32 uint32_t
-#define b32 bool
-#define i16 int16_t
-#define i32 int
-#define i64 long
-#define u64 uint64_t
+typedef uint8_t  u8 ;
+typedef uint32_t u32;
+typedef bool     b32;
+typedef int16_t  i16;
+typedef int      i32;
+typedef long     i64;
+typedef uint64_t u64;
 
 #define Kilobytes(Value) ((Value)*1024)
 #define Megabytes(Value) (Kilobytes(Value)*1024)
