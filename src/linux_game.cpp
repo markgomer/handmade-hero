@@ -1,3 +1,20 @@
+/*
+ TODO: THIS IS NOT A FINAL PLATFORM LAYER!!!
+    - Saved game locations 
+    - Getting a handle to our executable file 
+    - Asset loading path 
+    - Threading (launch a thread)
+    - Raw Input (support for multiple keyboards)
+    x Sleep/timeBeginPeriod
+    - ClipCursor() (for multimonitor support)
+    - Fullscreen support
+    - Control cursor visibility
+    - Query cancel auto play
+    - handle application not active
+    - Hardware acceleration (OpenGL, Vulkan, BOTH?) 
+    - Get keyboard layout
+*/
+
 #include "game.cpp"
 
 #include <stdlib.h>

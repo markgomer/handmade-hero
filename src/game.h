@@ -36,6 +36,15 @@
 #define AUDIO_BUF_SIZE 8192
 #endif
 
+
+/*
+ NOTE: Services that the game provides to the platform layer.
+ (This may expand on the future - sound on a separate thread etc.)
+*/
+
+// FOUR THINGS - timing, controller/keyboard intput, bitmap buffer to use, sound buffer to use
+
+// TODO: (casey): In the future, rendenring _specifically_ will become a three-tiered abstraction!!!
 struct game_offscreen_buffer
 {
     // NOTE: (casey) Pixels are always 32-bit wide, Memory order BB GG RR XX
