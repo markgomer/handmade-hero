@@ -2,7 +2,7 @@
     description = "Handmade Hero development environment";
 
     inputs = {
-        nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+        nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     };
 
     outputs = { self, nixpkgs }:
@@ -23,7 +23,6 @@
                 buildInputs = [
                     pkgs.libx11
                     pkgs.alsa-lib
-                    pkgs.SDL2
                 ];
                 # tools needed only during the build process
                 nativeBuildInputs = [
