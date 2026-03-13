@@ -36,17 +36,17 @@ static void
 GameOutputSound(game_sound_output_buffer* SoundBuffer, int ToneHz)
 {
     static float tSine;
-    int16 ToneVolume = 3000;
+    i16 ToneVolume = 3000;
     int WavePeriod = SoundBuffer->SamplesPerSecond/ToneHz;
 
-    int16* SampleOut = (int16*)SoundBuffer->Samples;
+    i16* SampleOut = (i16*)SoundBuffer->Samples;
 
     for(int SampleIndex = 0;
         SampleIndex < SoundBuffer->SampleCount;
         ++SampleIndex)
     {
         float SineValue = sinf(tSine);
-        int16 SampleValue = (int16)(SineValue * ToneVolume);
+        i16 SampleValue = (i16)(SineValue * ToneVolume);
         *SampleOut++ = SampleValue;
         *SampleOut++ = SampleValue;
 

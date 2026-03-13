@@ -1,3 +1,20 @@
+/*
+ TODO: THIS IS NOT A FINAL PLATFORM LAYER!!!
+    - Saved game locations 
+    - Getting a handle to our executable file 
+    - Asset loading path 
+    - Threading (launch a thread)
+    - Raw Input (support for multiple keyboards)
+    x Sleep/timeBeginPeriod
+    - ClipCursor() (for multimonitor support)
+    - Fullscreen support
+    - Control cursor visibility
+    - Query cancel auto play
+    - handle application not active
+    - Hardware acceleration (OpenGL, Vulkan, BOTH?) 
+    - Get keyboard layout
+*/
+
 #include "game.cpp"
 
 #include <stdlib.h>
@@ -50,7 +67,7 @@ LinuxAudioAvailable(snd_pcm_t* pcm)
 }
 
 static void
-LinuxAudioWrite(snd_pcm_t* pcm, int16* buf, size_t size)
+LinuxAudioWrite(snd_pcm_t* pcm, i16* buf, size_t size)
 {
     int t = LinuxAudioAvailable(pcm);
     if (t > 0)
@@ -419,27 +436,30 @@ LinuxProcessDigitalButton(game_button_state* OldState,
 int
 main(int argc, char *argv[])
 {
-    int W = 600, H = 480;
-    uint32_t *buf = (uint32_t*)malloc(W * H * sizeof(uint32_t));
-    struct game_offscreen_buffer Offscreen_buffer = {
-        .Memory = buf,
-        .Width = W,
-        .Height = H,
-    };
-    struct linux_window LinuxWindow = {
-        .WindowTitle = "Handmade Hero",
-    };
+    struct game_offscreen_buffer Offscreen_buffer = {};
+    Offscreen_buffer.Width = 600;
+    Offscreen_buffer.Height = 480;
+    Offscreen_buffer.Memory = (u32*)malloc(
+        Offscreen_buffer.Width * Offscreen_buffer.Height * sizeof(uint32_t)
+    );
+
+    struct linux_window LinuxWindow = {};
+    LinuxWindow.WindowTitle = "Handmade Hero";
 
     int JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
     LinuxControllerInputState LinuxJoyStates[MAX_CONTROLLERS] = {};
+
     game_input Input[2] = {};
     game_input *NewInput = &Input[0];
     game_input *OldInput = &Input[1];
+
     game_kb_mouse_input KbMouse = {};
+
     LinuxJoyInit(JoyFDs, LinuxJoyStates);
 
-    int16 Samples[(AUDIO_SAMPLE_RATE/FRAMES_PER_SECOND) * 2] = {};
+    i16 Samples[(AUDIO_SAMPLE_RATE/FRAMES_PER_SECOND) * 2] = {};
     snd_pcm_t* pcm = NULL;
+
     LinuxAudioOpen(&pcm);
 
     game_sound_output_buffer GameSound = {};
@@ -448,13 +468,16 @@ main(int argc, char *argv[])
     GameSound.Samples = Samples;
 
     game_memory GameMemory = {};
-    GameMemory.PermanentStorageSize = Megabytes((uint64_t)64);
-    GameMemory.TransientStorageSize = Gigabytes((uint64_t)2);
-    uint64_t TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+    GameMemory.PermanentStorageSize = Megabytes((u64)64);
+    GameMemory.TransientStorageSize = Gigabytes((u64)2);
+    u64 TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
 
     GameMemory.PermanentStorage = malloc(TotalSize);
-    // NOTE: uint8_t* because it's a byte pointer
-    GameMemory.TransientStorage = ((uint8_t*)GameMemory.PermanentStorage +
+    /* NOTE: uint8_t* because it's a byte pointer
+        NOTE to myself: it gets the location of the permanent storage, then move 
+        the pointer to the next available location in the allocated memory. That's 
+        where our transient storage will begin */
+    GameMemory.TransientStorage = ((u8*)GameMemory.PermanentStorage +
                                   GameMemory.PermanentStorageSize);
 
     // TODO: casey wrapped this around all the rest of the code.

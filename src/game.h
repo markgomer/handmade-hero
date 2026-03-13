@@ -10,15 +10,21 @@
  * 1 = Slow code welcome
  * */
 
-#include <stdint.h>
-
-#define int16 int16_t
-
 #if HANDMADE_SLOW
 #define Assert(Expression) if(!(Expression)) {*(int*)0 = 0;}
 #else
 #define Assert(Expression)
 #endif
+
+#include <stdint.h>
+
+typedef uint8_t  u8 ;
+typedef uint32_t u32;
+typedef bool     b32;
+typedef int16_t  i16;
+typedef int      i32;
+typedef long     i64;
+typedef uint64_t u64;
 
 #define Kilobytes(Value) ((Value)*1024)
 #define Megabytes(Value) (Kilobytes(Value)*1024)
@@ -30,6 +36,15 @@
 #define AUDIO_BUF_SIZE 8192
 #endif
 
+
+/*
+ NOTE: Services that the game provides to the platform layer.
+ (This may expand on the future - sound on a separate thread etc.)
+*/
+
+// FOUR THINGS - timing, controller/keyboard intput, bitmap buffer to use, sound buffer to use
+
+// TODO: (casey): In the future, rendenring _specifically_ will become a three-tiered abstraction!!!
 struct game_offscreen_buffer
 {
     // NOTE: (casey) Pixels are always 32-bit wide, Memory order BB GG RR XX
@@ -45,7 +60,7 @@ struct game_sound_output_buffer
 {
     int SamplesPerSecond;
     int SampleCount;
-    int16* Samples;
+    i16* Samples;
 };
 
 struct game_button_state
@@ -99,10 +114,10 @@ struct game_input
 struct game_memory
 {
     bool IsInitialized;
-    uint64_t PermanentStorageSize;
+    u64 PermanentStorageSize;
     void* PermanentStorage; // NOTE: REQUIRED to be cleared to zero at startup
 
-    uint64_t TransientStorageSize;
+    u64 TransientStorageSize;
     void* TransientStorage; // NOTE: REQUIRED to be cleared to zero at startup
 };
 
