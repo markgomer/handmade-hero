@@ -436,16 +436,15 @@ LinuxProcessDigitalButton(game_button_state* OldState,
 int
 main(int argc, char *argv[])
 {
-    int W = 600, H = 480;
-    uint32_t *buf = (uint32_t*)malloc(W * H * sizeof(uint32_t));
-    struct game_offscreen_buffer Offscreen_buffer = {
-        .Memory = buf,
-        .Width = W,
-        .Height = H,
-    };
-    struct linux_window LinuxWindow = {
-        .WindowTitle = "Handmade Hero",
-    };
+    struct game_offscreen_buffer Offscreen_buffer = {};
+    Offscreen_buffer.Width = 600;
+    Offscreen_buffer.Height = 480;
+    Offscreen_buffer.Memory = (u32*)malloc(
+        Offscreen_buffer.Width * Offscreen_buffer.Height * sizeof(uint32_t)
+    );
+
+    struct linux_window LinuxWindow = {};
+    LinuxWindow.WindowTitle = "Handmade Hero";
 
     int JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
     LinuxControllerInputState LinuxJoyStates[MAX_CONTROLLERS] = {};
