@@ -1,0 +1,9 @@
+-x
+c++
+-g
+-Wall
+-O0
+-std=c++23
+-DHANDMADE_SLOW=1
+-DHANDMADE_LINUX=1
+-DHANDMADE_INTERNAL=1

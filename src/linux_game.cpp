@@ -50,7 +50,7 @@ LinuxAudioAvailable(snd_pcm_t* pcm)
 }
 
 static void
-LinuxAudioWrite(snd_pcm_t* pcm, int16* buf, size_t size)
+LinuxAudioWrite(snd_pcm_t* pcm, i16* buf, size_t size)
 {
     int t = LinuxAudioAvailable(pcm);
     if (t > 0)
@@ -432,14 +432,18 @@ main(int argc, char *argv[])
 
     int JoyFDs[MAX_CONTROLLERS] = {-1, -1, -1, -1};
     LinuxControllerInputState LinuxJoyStates[MAX_CONTROLLERS] = {};
+
     game_input Input[2] = {};
     game_input *NewInput = &Input[0];
     game_input *OldInput = &Input[1];
+
     game_kb_mouse_input KbMouse = {};
+
     LinuxJoyInit(JoyFDs, LinuxJoyStates);
 
-    int16 Samples[(AUDIO_SAMPLE_RATE/FRAMES_PER_SECOND) * 2] = {};
+    i16 Samples[(AUDIO_SAMPLE_RATE/FRAMES_PER_SECOND) * 2] = {};
     snd_pcm_t* pcm = NULL;
+
     LinuxAudioOpen(&pcm);
 
     game_sound_output_buffer GameSound = {};
@@ -448,13 +452,16 @@ main(int argc, char *argv[])
     GameSound.Samples = Samples;
 
     game_memory GameMemory = {};
-    GameMemory.PermanentStorageSize = Megabytes((uint64_t)64);
-    GameMemory.TransientStorageSize = Gigabytes((uint64_t)2);
-    uint64_t TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
+    GameMemory.PermanentStorageSize = Megabytes((u64)64);
+    GameMemory.TransientStorageSize = Gigabytes((u64)2);
+    u64 TotalSize = GameMemory.PermanentStorageSize + GameMemory.TransientStorageSize;
 
     GameMemory.PermanentStorage = malloc(TotalSize);
-    // NOTE: uint8_t* because it's a byte pointer
-    GameMemory.TransientStorage = ((uint8_t*)GameMemory.PermanentStorage +
+    /* NOTE: uint8_t* because it's a byte pointer
+        NOTE to myself: it gets the location of the permanent storage, then move 
+        the pointer to the next available location in the allocated memory. That's 
+        where our transient storage will begin */
+    GameMemory.TransientStorage = ((u8*)GameMemory.PermanentStorage +
                                   GameMemory.PermanentStorageSize);
 
     // TODO: casey wrapped this around all the rest of the code.

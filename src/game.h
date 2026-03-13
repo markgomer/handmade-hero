@@ -10,15 +10,21 @@
  * 1 = Slow code welcome
  * */
 
-#include <stdint.h>
-
-#define int16 int16_t
-
 #if HANDMADE_SLOW
 #define Assert(Expression) if(!(Expression)) {*(int*)0 = 0;}
 #else
 #define Assert(Expression)
 #endif
+
+#include <stdint.h>
+
+#define u8  uint8_t
+#define u32 uint32_t
+#define b32 bool
+#define i16 int16_t
+#define i32 int
+#define i64 long
+#define u64 uint64_t
 
 #define Kilobytes(Value) ((Value)*1024)
 #define Megabytes(Value) (Kilobytes(Value)*1024)
@@ -45,7 +51,7 @@ struct game_sound_output_buffer
 {
     int SamplesPerSecond;
     int SampleCount;
-    int16* Samples;
+    i16* Samples;
 };
 
 struct game_button_state
@@ -99,10 +105,10 @@ struct game_input
 struct game_memory
 {
     bool IsInitialized;
-    uint64_t PermanentStorageSize;
+    u64 PermanentStorageSize;
     void* PermanentStorage; // NOTE: REQUIRED to be cleared to zero at startup
 
-    uint64_t TransientStorageSize;
+    u64 TransientStorageSize;
     void* TransientStorage; // NOTE: REQUIRED to be cleared to zero at startup
 };
 
