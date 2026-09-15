@@ -22,6 +22,7 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "linux_game.h"
 
@@ -37,6 +38,88 @@
 /* from https://github.com/zserge/fenster/blob/main/fenster.h */
 const static int FENSTER_KEYCODES[124] = {XK_BackSpace,8,XK_Delete,127,XK_Down,18,XK_End,5,XK_Escape,27,XK_Home,2,XK_Insert,26,XK_Left,20,XK_Page_Down,4,XK_Page_Up,3,XK_Return,10,XK_Right,19,XK_Tab,9,XK_Up,17,XK_apostrophe,39,XK_backslash,92,XK_bracketleft,91,XK_bracketright,93,XK_comma,44,XK_equal,61,XK_grave,96,XK_minus,45,XK_period,46,XK_semicolon,59,XK_slash,47,XK_space,32,XK_a,65,XK_b,66,XK_c,67,XK_d,68,XK_e,69,XK_f,70,XK_g,71,XK_h,72,XK_i,73,XK_j,74,XK_k,75,XK_l,76,XK_m,77,XK_n,78,XK_o,79,XK_p,80,XK_q,81,XK_r,82,XK_s,83,XK_t,84,XK_u,85,XK_v,86,XK_w,87,XK_x,88,XK_y,89,XK_z,90,XK_0,48,XK_1,49,XK_2,50,XK_3,51,XK_4,52,XK_5,53,XK_6,54,XK_7,55,XK_8,56,XK_9,57};
 
+
+static debug_read_file_result 
+DEBUGPlatformReadEntireFile(char *Filename)
+{
+    debug_read_file_result Result = {};
+
+    int FileHandle = open(Filename, O_RDONLY);
+    if(FileHandle == -1)
+    {
+        return Result;
+    }
+
+    struct stat FileStatus;
+    if(fstat(FileHandle, &FileStatus) == -1)
+    {
+        close(FileHandle);
+        return Result;
+    }
+    Result.ContentsSize = SafeTruncateUInt64(FileStatus.st_size);
+
+    Result.Contents = malloc(Result.ContentsSize);
+    if(!Result.Contents)
+    {
+        close(FileHandle);
+        Result.ContentsSize = 0;
+        return Result;
+    }
+
+
+    u32 BytesToRead = Result.ContentsSize;
+    u8 *NextByteLocation = (u8*)Result.Contents;
+    while (BytesToRead)
+    {
+        u32 BytesRead = read(FileHandle, NextByteLocation, BytesToRead);
+        if (BytesRead == -1)
+        {
+            free(Result.Contents);
+            Result.Contents = 0;
+            Result.ContentsSize = 0;
+            close(FileHandle);
+            return Result;
+        }
+        BytesToRead -= BytesRead;
+        NextByteLocation += BytesRead;
+    }
+
+    close(FileHandle);
+    return(Result);
+}
+
+static void
+DEBUGPlatformFreeFileMemory(void *Memory)
+{
+    free(Memory);
+}
+
+static b32
+DEBUGPlatformWriteEntireFile(char *Filename, u32 MemorySize, void *Memory)
+{
+    int FileHandle = open(Filename, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+    if (!FileHandle)
+        return false;
+
+    u32 BytesToWrite = MemorySize;
+    u8 *NextByteLocation = (u8*)Memory;
+    while (BytesToWrite)
+    {
+        u32 BytesWritten = write(FileHandle, NextByteLocation, BytesToWrite);
+        if (BytesWritten == -1)
+        {
+            close(FileHandle);
+            return false;
+        }
+        BytesToWrite -= BytesWritten;
+        NextByteLocation += BytesWritten;
+    }
+
+    close(FileHandle);
+
+    return true;
+}
 
 static int
 LinuxAudioOpen(snd_pcm_t** pcm)
@@ -325,6 +408,31 @@ LinuxGetKBMouseState(game_offscreen_buffer* b, game_kb_mouse_input* kb_mouse)
     return IsRunning;
 }
 
+static void
+LinuxProcessDigitalButton(game_button_state* OldState,
+                          game_button_state* NewState,
+                          uint8_t LinuxJoyButtonState,
+                          uint8_t ButtonBit)
+{
+    bool IsDown = ((LinuxJoyButtonState & ButtonBit) != 0);
+    NewState->EndedUp = IsDown;
+    NewState->EndedDown = IsDown;
+    NewState->EndedLeft = IsDown;
+    NewState->EndedRight = IsDown;
+
+    NewState->HalfTransitionCount =
+        (OldState->EndedUp != NewState->EndedUp) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedDown != NewState->EndedDown) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedLeft != NewState->EndedLeft) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedRight != NewState->EndedRight) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedRightShoulder != NewState->EndedRightShoulder) ? 1 : 0;
+    NewState->HalfTransitionCount =
+        (OldState->EndedLeftShoulder != NewState->EndedLeftShoulder) ? 1 : 0;
+}
 
 static int
 LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
@@ -397,7 +505,8 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
             {
                 // Window close button
                 if (ev.xclient.data.l[0] ==
-                        (long)XInternAtom(LinuxWindow->dpy, "WM_DELETE_WINDOW", False))
+                    (long)XInternAtom(LinuxWindow->dpy, "WM_DELETE_WINDOW",
+                                      False))
                 {
                     IsRunning = 0;
                 }
@@ -405,32 +514,6 @@ LinuxWindowLoop(struct game_offscreen_buffer* Offscreen_buffer,
         }
     }
     return IsRunning;
-}
-
-static void
-LinuxProcessDigitalButton(game_button_state* OldState,
-                          game_button_state* NewState,
-                          uint8_t LinuxJoyButtonState,
-                          uint8_t ButtonBit)
-{
-    bool IsDown = ((LinuxJoyButtonState & ButtonBit) != 0);
-    NewState->EndedUp = IsDown;
-    NewState->EndedDown = IsDown;
-    NewState->EndedLeft = IsDown;
-    NewState->EndedRight = IsDown;
-
-    NewState->HalfTransitionCount =
-        (OldState->EndedUp != NewState->EndedUp) ? 1 : 0;
-    NewState->HalfTransitionCount =
-        (OldState->EndedDown != NewState->EndedDown) ? 1 : 0;
-    NewState->HalfTransitionCount =
-        (OldState->EndedLeft != NewState->EndedLeft) ? 1 : 0;
-    NewState->HalfTransitionCount =
-        (OldState->EndedRight != NewState->EndedRight) ? 1 : 0;
-    NewState->HalfTransitionCount =
-        (OldState->EndedRightShoulder != NewState->EndedRightShoulder) ? 1 : 0;
-    NewState->HalfTransitionCount =
-        (OldState->EndedLeftShoulder != NewState->EndedLeftShoulder) ? 1 : 0;
 }
 
 int
@@ -474,9 +557,9 @@ main(int argc, char *argv[])
 
     GameMemory.PermanentStorage = malloc(TotalSize);
     /* NOTE: uint8_t* because it's a byte pointer
-        NOTE to myself: it gets the location of the permanent storage, then move 
-        the pointer to the next available location in the allocated memory. That's 
-        where our transient storage will begin */
+       NOTE to myself: it gets the location of the permanent storage, then move
+       the pointer to the next available location in the allocated memory.
+       That's where our transient storage will begin */
     GameMemory.TransientStorage = ((u8*)GameMemory.PermanentStorage +
                                   GameMemory.PermanentStorageSize);
 
@@ -490,10 +573,10 @@ main(int argc, char *argv[])
 
     LinuxOpenX11Window(&Offscreen_buffer, &LinuxWindow);
 
-    int64_t now = GetYerTime();
-    int64_t start = now;
+    i64 now = GetYerTime();
+    i64 start = now;
 
-    int IsRunning = 1;
+    i32 IsRunning = 1;
     while(IsRunning)
     {
         if(!LinuxWindowLoop(&Offscreen_buffer, &LinuxWindow, &KbMouse))
@@ -510,7 +593,6 @@ main(int argc, char *argv[])
         {
             game_controller_input *OldController = &OldInput->Controllers[ControllerIndex];
             game_controller_input *NewController = &NewInput->Controllers[ControllerIndex];
-            
             NewController->IsAnalog = true;
             // NOTE: Normalize the sticks!
             float X = LinuxJoyStates[ControllerIndex].left_stick_x / 32767.0f;
@@ -561,7 +643,7 @@ main(int argc, char *argv[])
         GameUpdateAndRender(&GameMemory, NewInput, &Offscreen_buffer, &GameSound);
         LinuxAudioWrite(pcm, GameSound.Samples, GameSound.SampleCount);
 
-        int64_t time = GetYerTime();
+        i64 time = GetYerTime();
         if (time - now < 1000 / FRAMES_PER_SECOND) // 30 frames per second
         {
             Sleeper(time - now);
