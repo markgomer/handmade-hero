@@ -1,7 +1,7 @@
 #include "game.h"
 
 #define Pi32 3.14159265359f
-#include <cmath>
+// #include <cmath>
 
 /*
  * This algorithm uses the pixels on a memory Buffer as a data structure and we
@@ -50,10 +50,10 @@ GameOutputSound(game_sound_output_buffer* SoundBuffer, int ToneHz)
         *SampleOut++ = SampleValue;
         *SampleOut++ = SampleValue;
 
-        tSine += 2.0f*M_PI*1.0f/(float)WavePeriod;
-        if (tSine > 2.0f*M_PI)
+        tSine += 2.0f*Pi32*1.0f/(float)WavePeriod;
+        if (tSine > 2.0f*Pi32)
         {
-            tSine -= 2.0f*M_PI;
+            tSine -= 2.0f*Pi32;
         }
     }
 }
@@ -70,8 +70,15 @@ GameUpdateAndRender(game_memory* Memory,
     game_state* GameState = (game_state*)Memory->PermanentStorage;
     if(!Memory->IsInitialized)
     {
-        GameState->ToneHz = 256;
+        const char* FileName = __FILE_NAME__;
+        debug_read_file_result File = DEBUGPlatformReadEntireFile(FileName);
+        if(File.Contents)
+        {
+            DEBUGPlatformWriteEntireFile("../data/test.out", File.ContentsSize, File.Contents);
+            DEBUGPlatformFreeFileMemory(File.Contents);
+        }
 
+        GameState->ToneHz = 256;
         // TODO: This may be more appropriate to do in the platform layer
         Memory->IsInitialized = true;
     }

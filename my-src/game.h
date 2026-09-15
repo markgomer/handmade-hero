@@ -1,4 +1,4 @@
-#if !defined(HANDMADE_H)
+#ifndef HANDMADE_H
 
 /*
  * HANDMADE_INTERNAL
@@ -36,6 +36,27 @@ typedef uint64_t u64;
 #define AUDIO_BUF_SIZE 8192
 #endif
 
+inline u32
+SafeTruncateUInt64(u64 Value)
+{
+	Assert(Value <= 0xFFFFFFFF);
+	u32 Result = (u32)Value;
+	return(Result);
+}
+
+#if HANDMADE_INTERNAL
+/*
+ NOTE: Services that the platform layer provides to the game.
+*/
+struct debug_read_file_result
+{
+    u32 ContentsSize;
+    void* Contents;
+};
+static debug_read_file_result DEBUGPlatformReadEntireFile(const char* Filename);
+static void DEBUGPlatformFreeFileMemory(void* Memory);
+static b32 DEBUGPlatformWriteEntireFile(char* Filename, u32 MemorySize, void* Memory);
+#endif
 
 /*
  NOTE: Services that the game provides to the platform layer.
