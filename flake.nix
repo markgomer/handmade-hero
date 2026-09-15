@@ -27,7 +27,7 @@
                 # tools needed only during the build process
                 nativeBuildInputs = [
                     pkgs.gcc
-                    pkgs.clang-tools # for neovim's LSP
+                    # pkgs.clang-tools # for neovim's LSP
                 ];
             };
         });
